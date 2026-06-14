@@ -54,7 +54,7 @@ const destroySession=()=>{SESSION=null;};
 const validSession=id=>!!(SESSION&&SESSION.userId===id&&Date.now()<SESSION.exp);
 
 // ── GOOGLE SHEETS SYNC (CORS-safe via hidden iframe form POST) ────────────────
-const SHEET_URL="https://script.google.com/macros/s/AKfycbxNhkMEC4H-F-QiIAlnBTdn7NBqsTmmh621WBBuIC6VgQ8pwHxG5hobv6qTGl8FGNQz/exec";
+const SHEET_URL="https://script.google.com/macros/s/AKfycbzNqmrVBih1pWDWC-Ei2I95TvWeUoxYCA2Am60oz3dGF1UiDilxJrDlFIH28hdoihFF/exec";
 
 const syncToSheet=(type,payload)=>{
   try{
