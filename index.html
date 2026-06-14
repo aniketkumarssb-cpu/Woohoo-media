@@ -4,9 +4,15 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
   <meta name="theme-color" content="#0F172A"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="MY Office"/>
+  <meta name="apple-mobile-web-app-title" content="WooHoo Media"/>
+  <meta name="application-name" content="WooHoo Media"/>
+  <meta name="description" content="WooHoo Media — Manipulating Internet"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="icon.png"/>
+  <link rel="icon" type="image/png" sizes="512x512" href="icon.png"/>
+  <link rel="shortcut icon" href="icon.png"/>
   <title>WooHoo Media</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -14,166 +20,190 @@
   <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif}#root{min-height:100vh}</style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel" data-presets="react">
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const{useState,useEffect,useRef}=React;
 
-const { useState, useEffect, useRef } = React;
-
-const C = {
-  bg:"#F4F5F7", white:"#FFFFFF", border:"#E2E8F0", border2:"#CBD5E1",
-  text:"#0F172A", sub:"#334155", muted:"#94A3B8",
-  accent:"#4F46E5", accentL:"#EEF2FF",
-  green:"#059669", greenL:"#ECFDF5",
-  red:"#E11D48", redL:"#FFF1F2",
-  yellow:"#D97706", yellowL:"#FFFBEB",
-  purple:"#7C3AED", purpleL:"#F5F3FF",
-  orange:"#EA580C", orangeL:"#FFF7ED",
-  blue:"#0284C7", blueL:"#F0F9FF",
-  pink:"#DB2777", teal:"#0D9488", navy:"#1E3A5F",
+// ── THEME ─────────────────────────────────────────────────────────────────────
+const C={
+  bg:"#F4F5F7",white:"#FFFFFF",border:"#E2E8F0",border2:"#CBD5E1",
+  text:"#0F172A",sub:"#334155",muted:"#94A3B8",
+  accent:"#4F46E5",accentL:"#EEF2FF",
+  green:"#059669",greenL:"#ECFDF5",
+  red:"#E11D48",redL:"#FFF1F2",
+  yellow:"#D97706",yellowL:"#FFFBEB",
+  purple:"#7C3AED",purpleL:"#F5F3FF",
+  orange:"#EA580C",orangeL:"#FFF7ED",
+  blue:"#0284C7",blueL:"#F0F9FF",
+  pink:"#DB2777",navy:"#1E3A5F",
 };
 
-const SEC = {
-  PIN_MAX:8, NAME_MAX:60, NOTE_MAX:500, LINK_MAX:300, TITLE_MAX:120, MSG_MAX:400, HANDLE_MAX:50,
-  validPin(v){ if(typeof v!=="string"||v.length<4||v.length>this.PIN_MAX)return false; for(let i=0;i<v.length;i++){const c=v.charCodeAt(i);if(c<48||c>57)return false;} return true; },
-  sanitize(s,max=200){ if(typeof s!=="string")return""; return s.slice(0,max).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,"").replace(/(^|\s)\$/g," ").trim(); },
-  safeUrl(s){ try{const u=new URL(s);if(u.protocol==="https:"||u.protocol==="http:")return u.href;}catch{}return null; },
+// ── SECURITY ──────────────────────────────────────────────────────────────────
+const SEC={
+  PIN_MAX:8,NAME_MAX:60,NOTE_MAX:500,LINK_MAX:300,TITLE_MAX:120,MSG_MAX:400,HANDLE_MAX:50,
+  validPin(v){if(typeof v!=="string"||v.length<4||v.length>this.PIN_MAX)return false;for(let i=0;i<v.length;i++){const c=v.charCodeAt(i);if(c<48||c>57)return false;}return true;},
+  sanitize(s,max=200){if(typeof s!=="string")return"";return s.slice(0,max).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,"").replace(/(^|\s)\$/g," ").trim();},
+  safeUrl(s){try{const u=new URL(s);if(u.protocol==="https:"||u.protocol==="http:")return u.href;}catch{}return null;},
 };
 
+// ── SESSION ───────────────────────────────────────────────────────────────────
 let SESSION=null;
 const mkTok=()=>{const a=new Uint8Array(16);crypto.getRandomValues(a);return Array.from(a).map(b=>b.toString(16).padStart(2,"0")).join("");};
 const createSession=id=>{SESSION={userId:id,token:mkTok(),exp:Date.now()+8*3600*1000};};
 const destroySession=()=>{SESSION=null;};
 const validSession=id=>!!(SESSION&&SESSION.userId===id&&Date.now()<SESSION.exp);
 
+// ── GOOGLE SHEETS SYNC ────────────────────────────────────────────────────────
+const SHEET_URL="https://script.google.com/macros/s/AKfycbzNqmrVBih1pWDWC-Ei2I95TvWeUoxYCA2Am60oz3dGF1UiDilxJrDlFIH28hdoihFF/exec";
+const syncToSheet=async(type,payload)=>{
+  try{
+    await fetch(SHEET_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify({type,...payload})});
+  }catch(e){console.warn("Sheet sync failed:",e);}
+};
+
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const CONTENT_TYPES_BY_DEPT={
+  Content:["Carousel","Static"],
+  Video:["Main Video","Top 5 News","Paparazzi Video"],
+  Research:["Complete Scripts","Research","Voiceover"],
+};
+const getContentTypes=dept=>CONTENT_TYPES_BY_DEPT[dept]||["Carousel","Static"];
+const PRIS=["High","Medium","Low"];
+const STATS=["Pending","In Progress","Done"];
+const LTYPES=["Casual","Sick","Earned","Unpaid","Work from Home"];
+const DEPTS=["Content","Video","Research","All","Other"];
+const CATS=["Marketing","Design","Content","Tech","Food","Fashion","Travel","Regional","Other"];
+const IG_PAGES=[
+  "@rajasthan","@maharashtra","@bombay","@kolkata","@westbengal",
+  "@sarcasm","@moodofgirls","@brands","@ultraluxury","@jewellery",
+  "@mewar","@uttarpradesh","@ayodhya","@rasalkhaimah","@worldtour","@sharemarket",
+  "@muzic","@rapindia","@aifuture","@techindia","@tamilnadu","@paparazzi",
+  "Video Projects","Research Briefs","Other",
+];
+
 const SEED={
   users:[
-    {id:1,name:"Aarav Shah",role:"Admin",dept:"All",avatar:"AS",pin:"0000"},
-    {id:2,name:"Priya Mehta",role:"Manager",dept:"All",avatar:"PM",pin:"1111"},
-    {id:3,name:"Rahul Verma",role:"TL",dept:"Content",avatar:"RV",pin:"2222"},
-    {id:4,name:"Sneha Patel",role:"TL",dept:"Design",avatar:"SP",pin:"3333"},
-    {id:5,name:"Adwait Joshi",role:"EMP",dept:"Content",avatar:"AJ",pin:"4444",tlId:3},
-    {id:6,name:"Meera Nair",role:"EMP",dept:"Design",avatar:"MN",pin:"5555",tlId:4},
-    {id:7,name:"Vikram Singh",role:"EMP",dept:"Content",avatar:"VS",pin:"6666",tlId:3},
+    {id:1,name:"Admin",role:"Admin",dept:"All",avatar:"AD",pin:"0000"},
+    {id:2,name:"Manager",role:"Manager",dept:"All",avatar:"MG",pin:"1111"},
+    // TLs
+    {id:3,name:"Salman",  role:"TL",dept:"Content", avatar:"SL",pin:"2001"},
+    {id:4,name:"Kaif",    role:"TL",dept:"Content", avatar:"KF",pin:"2002"},
+    {id:5,name:"Sandeep", role:"TL",dept:"Content", avatar:"SD",pin:"2003"},
+    {id:6,name:"Aniket T",role:"TL",dept:"Content", avatar:"AT",pin:"2004"},
+    {id:7,name:"Chahat",  role:"TL",dept:"Video",   avatar:"CH",pin:"2005"},
+    // Salman's team
+    {id:8, name:"Salman", role:"EMP",dept:"Content",avatar:"SL",pin:"3001",tlId:3},
+    {id:9, name:"Irfan",  role:"EMP",dept:"Content",avatar:"IR",pin:"3002",tlId:3},
+    {id:10,name:"Nikhil", role:"EMP",dept:"Content",avatar:"NK",pin:"3003",tlId:3},
+    // Kaif's team
+    {id:11,name:"Kaif",role:"EMP",dept:"Content",avatar:"KF",pin:"3004",tlId:4},
+    {id:12,name:"Om-1",role:"EMP",dept:"Content",avatar:"O1",pin:"3005",tlId:4},
+    // Sandeep's team
+    {id:13,name:"Sandeep",role:"EMP",dept:"Content",avatar:"SD",pin:"3006",tlId:5},
+    {id:14,name:"Shubham",role:"EMP",dept:"Content",avatar:"SH",pin:"3007",tlId:5},
+    {id:15,name:"Rahul",  role:"EMP",dept:"Content",avatar:"RL",pin:"3008",tlId:5},
+    // Aniket T's team
+    {id:16,name:"Aniket T",role:"EMP",dept:"Content",avatar:"AT",pin:"3009",tlId:6},
+    {id:17,name:"Om-2",    role:"EMP",dept:"Content",avatar:"O2",pin:"3010",tlId:6},
+    // Chahat's Video team
+    {id:18,name:"Divyesh",role:"EMP",dept:"Video",   avatar:"DV",pin:"3011",tlId:7},
+    {id:19,name:"Vishal", role:"EMP",dept:"Video",   avatar:"VS",pin:"3012",tlId:7},
+    {id:20,name:"Santosh",role:"EMP",dept:"Video",   avatar:"SN",pin:"3013",tlId:7},
+    {id:21,name:"Zaid",   role:"EMP",dept:"Video",   avatar:"ZD",pin:"3014",tlId:7},
+    // Chahat's Research team
+    {id:22,name:"Gracy",   role:"EMP",dept:"Research",avatar:"GR",pin:"3015",tlId:7},
+    {id:23,name:"Tanishka",role:"EMP",dept:"Research",avatar:"TK",pin:"3016",tlId:7},
+    {id:24,name:"Chahat",  role:"EMP",dept:"Research",avatar:"CH",pin:"3017",tlId:7},
   ],
-  tasks:[
-    {id:101,title:"Create 3 Reels for Maharashtra",type:"REEL",priority:"High",assignedTo:5,assignedBy:3,dueDate:"2026-06-20",status:"In Progress",note:"Focus on rural audience",createdAt:"2026-06-13"},
-    {id:102,title:"Design product launch carousel",type:"CAROUSEL",priority:"High",assignedTo:6,assignedBy:4,dueDate:"2026-06-18",status:"Pending",note:"Brand colors only",createdAt:"2026-06-13"},
-  ],
-  submissions:[
-    {id:201,empId:5,type:"REEL",title:"Maharashtra Reel Draft",link:"https://drive.google.com",taskId:101,status:"Pending",submittedAt:"2026-06-13 10:30",note:"First draft"},
-  ],
-  notifications:[
-    {id:301,toId:5,fromName:"Rahul Verma",msg:"🔴 PRIORITY: Reels due June 20",read:false,ts:"2026-06-13 09:00"},
-  ],
-  announcements:[{id:401,from:"Priya Mehta",msg:"Standup every Monday 10am.",ts:"2026-06-13 08:00"}],
-  attendance:[
-    {id:1001,userId:5,date:"2026-06-13",loginTime:"09:02",logoutTime:"18:05",hoursWorked:"9h 3m",wfh:false},
-    {id:1002,userId:6,date:"2026-06-13",loginTime:"09:30",logoutTime:"",hoursWorked:"",wfh:true},
-  ],
-  leaves:[
-    {id:2001,userId:5,from:"2026-06-20",to:"2026-06-21",days:2,reason:"Family function",type:"Casual",status:"Pending",appliedAt:"2026-06-13",reviewedBy:null},
-    {id:2002,userId:6,from:"2026-06-18",to:"2026-06-18",days:1,reason:"Medical",type:"Sick",status:"Approved",appliedAt:"2026-06-11",reviewedBy:"Priya Mehta"},
-  ],
-  igPages:[
-    {id:"ig1",handle:"rajasthan",name:"Rajasthan",category:"Regional",avatar:"RJ",updatedAt:"2026-06-13"},
-    {id:"ig2",handle:"maharashtra",name:"Maharashtra",category:"Regional",avatar:"MH",updatedAt:"2026-06-13"},
-    {id:"ig3",handle:"bombay",name:"Bombay",category:"Regional",avatar:"BM",updatedAt:"2026-06-13"},
-    {id:"ig4",handle:"kolkata",name:"Kolkata",category:"Regional",avatar:"KL",updatedAt:"2026-06-13"},
-    {id:"ig5",handle:"westbengal",name:"West Bengal",category:"Regional",avatar:"WB",updatedAt:"2026-06-13"},
-    {id:"ig6",handle:"sarcasm",name:"Sarcasm",category:"Humor",avatar:"SC",updatedAt:"2026-06-13"},
-    {id:"ig7",handle:"moodofgirls",name:"Mood of Girls",category:"Lifestyle",avatar:"MG",updatedAt:"2026-06-13"},
-    {id:"ig8",handle:"brands",name:"Brands",category:"Marketing",avatar:"BR",updatedAt:"2026-06-13"},
-    {id:"ig9",handle:"ultraluxury",name:"Ultra Luxury",category:"Luxury",avatar:"UL",updatedAt:"2026-06-13"},
-    {id:"ig10",handle:"jewellery",name:"Jewellery",category:"Fashion",avatar:"JW",updatedAt:"2026-06-13"},
-    {id:"ig11",handle:"mewar",name:"Mewar",category:"Regional",avatar:"MW",updatedAt:"2026-06-13"},
-    {id:"ig12",handle:"uttarpradesh",name:"Uttar Pradesh",category:"Regional",avatar:"UP",updatedAt:"2026-06-13"},
-    {id:"ig13",handle:"ayodhya",name:"Ayodhya",category:"Regional",avatar:"AY",updatedAt:"2026-06-13"},
-    {id:"ig14",handle:"rasalkhaimah",name:"Ras Al Khaimah",category:"Travel",avatar:"RK",updatedAt:"2026-06-13"},
-    {id:"ig15",handle:"worldtour",name:"World Tour",category:"Travel",avatar:"WT",updatedAt:"2026-06-13"},
-    {id:"ig16",handle:"sharemarket",name:"Share Market",category:"Finance",avatar:"SM",updatedAt:"2026-06-13"},
-    {id:"ig17",handle:"muzic",name:"Muzic",category:"Music",avatar:"MZ",updatedAt:"2026-06-13"},
-    {id:"ig18",handle:"rapindia",name:"Rap India",category:"Music",avatar:"RI",updatedAt:"2026-06-13"},
-    {id:"ig19",handle:"aifuture",name:"AI Future",category:"Tech",avatar:"AI",updatedAt:"2026-06-13"},
-    {id:"ig20",handle:"techindia",name:"Tech India",category:"Tech",avatar:"TI",updatedAt:"2026-06-13"},
-    {id:"ig21",handle:"tamilnadu",name:"Tamil Nadu",category:"Regional",avatar:"TN",updatedAt:"2026-06-13"},
-    {id:"ig22",handle:"paparazzi",name:"Paparazzi",category:"Entertainment",avatar:"PZ",updatedAt:"2026-06-13"},
-  ],
+  tasks:[],
+  submissions:[],
+  notifications:[],
+  announcements:[{id:1,from:"Manager",msg:"Welcome to WooHoo Media! Manipulating Internet 🚀",ts:"2026-06-14 09:00"}],
+  attendance:[],
+  leaves:[],
   messages:[],
+  igPages:[
+    {id:"ig1", handle:"rajasthan",    name:"Rajasthan",      category:"Regional",    avatar:"RJ",updatedAt:"2026-06-14"},
+    {id:"ig2", handle:"maharashtra",  name:"Maharashtra",    category:"Regional",    avatar:"MH",updatedAt:"2026-06-14"},
+    {id:"ig3", handle:"bombay",       name:"Bombay",         category:"Regional",    avatar:"BM",updatedAt:"2026-06-14"},
+    {id:"ig4", handle:"kolkata",      name:"Kolkata",        category:"Regional",    avatar:"KL",updatedAt:"2026-06-14"},
+    {id:"ig5", handle:"westbengal",   name:"West Bengal",    category:"Regional",    avatar:"WB",updatedAt:"2026-06-14"},
+    {id:"ig6", handle:"sarcasm",      name:"Sarcasm",        category:"Humor",       avatar:"SC",updatedAt:"2026-06-14"},
+    {id:"ig7", handle:"moodofgirls",  name:"Mood of Girls",  category:"Lifestyle",   avatar:"MG",updatedAt:"2026-06-14"},
+    {id:"ig8", handle:"brands",       name:"Brands",         category:"Marketing",   avatar:"BR",updatedAt:"2026-06-14"},
+    {id:"ig9", handle:"ultraluxury",  name:"Ultra Luxury",   category:"Luxury",      avatar:"UL",updatedAt:"2026-06-14"},
+    {id:"ig10",handle:"jewellery",    name:"Jewellery",      category:"Fashion",     avatar:"JW",updatedAt:"2026-06-14"},
+    {id:"ig11",handle:"mewar",        name:"Mewar",          category:"Regional",    avatar:"MW",updatedAt:"2026-06-14"},
+    {id:"ig12",handle:"uttarpradesh", name:"Uttar Pradesh",  category:"Regional",    avatar:"UP",updatedAt:"2026-06-14"},
+    {id:"ig13",handle:"ayodhya",      name:"Ayodhya",        category:"Regional",    avatar:"AY",updatedAt:"2026-06-14"},
+    {id:"ig14",handle:"rasalkhaimah", name:"Ras Al Khaimah", category:"Travel",      avatar:"RK",updatedAt:"2026-06-14"},
+    {id:"ig15",handle:"worldtour",    name:"World Tour",     category:"Travel",      avatar:"WT",updatedAt:"2026-06-14"},
+    {id:"ig16",handle:"sharemarket",  name:"Share Market",   category:"Finance",     avatar:"SM",updatedAt:"2026-06-14"},
+    {id:"ig17",handle:"muzic",        name:"Muzic",          category:"Music",       avatar:"MZ",updatedAt:"2026-06-14"},
+    {id:"ig18",handle:"rapindia",     name:"Rap India",      category:"Music",       avatar:"RI",updatedAt:"2026-06-14"},
+    {id:"ig19",handle:"aifuture",     name:"AI Future",      category:"Tech",        avatar:"AI",updatedAt:"2026-06-14"},
+    {id:"ig20",handle:"techindia",    name:"Tech India",     category:"Tech",        avatar:"TI",updatedAt:"2026-06-14"},
+    {id:"ig21",handle:"tamilnadu",    name:"Tamil Nadu",     category:"Regional",    avatar:"TN",updatedAt:"2026-06-14"},
+    {id:"ig22",handle:"paparazzi",    name:"Paparazzi",      category:"Entertainment",avatar:"PZ",updatedAt:"2026-06-14"},
+  ],
 };
 
-// ── Google Sheets Sync ────────────────────────────────────────────────────────
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbzNqmrVBih1pWDWC-Ei2I95TvWeUoxYCA2Am60oz3dGF1UiDilxJrDlFIH28hdoihFF/exec";
-
-const syncToSheet = async (type, payload) => {
-  try {
-    await fetch(SHEET_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, ...payload }),
-    });
-  } catch (e) {
-    console.warn("Sheet sync failed:", e);
-  }
-};
+const STORE="woohoo_v1";
 const loadData=()=>{try{const d=localStorage.getItem(STORE);return d?JSON.parse(d):SEED;}catch{return SEED;}};
 const saveData=d=>{try{localStorage.setItem(STORE,JSON.stringify(d));}catch{}};
 
+// ── REDUCER ───────────────────────────────────────────────────────────────────
 function reducer(s,a){
   let n;
   switch(a.type){
-    case"ADD_TASK":n={...s,tasks:[...s.tasks,a.p]};break;
-    case"DEL_TASK":n={...s,tasks:s.tasks.filter(t=>t.id!==a.id)};break;
-    case"UPD_TASK":n={...s,tasks:s.tasks.map(t=>t.id===a.id?{...t,...a.ch}:t)};break;
-    case"ADD_SUB":n={...s,submissions:[...s.submissions,a.p]};break;
-    case"UPD_SUB":n={...s,submissions:s.submissions.map(x=>x.id===a.id?{...x,status:a.st}:x)};break;
-    case"ADD_NOTIF":n={...s,notifications:[...s.notifications,a.p]};break;
-    case"READ_NOTIF":n={...s,notifications:s.notifications.map(x=>x.id===a.id?{...x,read:true}:x)};break;
-    case"ADD_ANN":n={...s,announcements:[...s.announcements,a.p]};break;
-    case"ADD_USER":n={...s,users:[...s.users,a.p]};break;
-    case"DEL_USER":n={...s,users:s.users.filter(u=>u.id!==a.id)};break;
-    case"UPD_USER":n={...s,users:s.users.map(u=>u.id===a.id?{...u,...a.ch}:u)};break;
-    case"PUNCH_IN":n={...s,attendance:[...s.attendance,a.p]};break;
-    case"PUNCH_OUT":n={...s,attendance:s.attendance.map(x=>x.id===a.id?{...x,logoutTime:a.out,hoursWorked:a.hw}:x)};break;
-    case"FIX_ATT":n={...s,attendance:s.attendance.map(x=>x.id===a.id?{...x,...a.ch}:x)};break;
-    case"DEL_ATT":n={...s,attendance:s.attendance.filter(x=>x.id!==a.id)};break;
-    case"ADD_LEAVE":n={...s,leaves:[...s.leaves,a.p]};break;
-    case"REV_LEAVE":n={...s,leaves:s.leaves.map(l=>l.id===a.id?{...l,status:a.st,reviewedBy:a.by}:l)};break;
-    case"ADD_IG":n={...s,igPages:[...s.igPages,a.p]};break;
-    case"DEL_IG":n={...s,igPages:s.igPages.filter(p=>p.id!==a.id)};break;
-    case"UPD_IG":n={...s,igPages:s.igPages.map(p=>p.id===a.id?{...p,...a.ch}:p)};break;
-    case"ADD_MSG":n={...s,messages:[...(s.messages||[]),a.p]};break;
-    case"READ_MSG":n={...s,messages:(s.messages||[]).map(m=>m.id===a.id?{...m,read:true}:m)};break;
+    case"ADD_TASK":   n={...s,tasks:[...s.tasks,a.p]};break;
+    case"DEL_TASK":   n={...s,tasks:s.tasks.filter(t=>t.id!==a.id)};break;
+    case"UPD_TASK":   n={...s,tasks:s.tasks.map(t=>t.id===a.id?{...t,...a.ch}:t)};break;
+    case"ADD_SUB":    n={...s,submissions:[...s.submissions,a.p]};break;
+    case"UPD_SUB":    n={...s,submissions:s.submissions.map(x=>x.id===a.id?{...x,status:a.st}:x)};break;
+    case"ADD_NOTIF":  n={...s,notifications:[...s.notifications,a.p]};break;
+    case"READ_NOTIF": n={...s,notifications:s.notifications.map(x=>x.id===a.id?{...x,read:true}:x)};break;
+    case"ADD_ANN":    n={...s,announcements:[...s.announcements,a.p]};break;
+    case"ADD_USER":   n={...s,users:[...s.users,a.p]};break;
+    case"DEL_USER":   n={...s,users:s.users.filter(u=>u.id!==a.id)};break;
+    case"UPD_USER":   n={...s,users:s.users.map(u=>u.id===a.id?{...u,...a.ch}:u)};break;
+    case"PUNCH_IN":   n={...s,attendance:[...s.attendance,a.p]};break;
+    case"PUNCH_OUT":  n={...s,attendance:s.attendance.map(x=>x.id===a.id?{...x,logoutTime:a.out,hoursWorked:a.hw}:x)};break;
+    case"FIX_ATT":    n={...s,attendance:s.attendance.map(x=>x.id===a.id?{...x,...a.ch}:x)};break;
+    case"DEL_ATT":    n={...s,attendance:s.attendance.filter(x=>x.id!==a.id)};break;
+    case"ADD_LEAVE":  n={...s,leaves:[...s.leaves,a.p]};break;
+    case"REV_LEAVE":  n={...s,leaves:s.leaves.map(l=>l.id===a.id?{...l,status:a.st,reviewedBy:a.by}:l)};break;
+    case"ADD_IG":     n={...s,igPages:[...s.igPages,a.p]};break;
+    case"DEL_IG":     n={...s,igPages:s.igPages.filter(p=>p.id!==a.id)};break;
+    case"UPD_IG":     n={...s,igPages:s.igPages.map(p=>p.id===a.id?{...p,...a.ch}:p)};break;
+    case"ADD_MSG":    n={...s,messages:[...(s.messages||[]),a.p]};break;
+    case"READ_MSG":   n={...s,messages:(s.messages||[]).map(m=>m.id===a.id?{...m,read:true}:m)};break;
     default:return s;
   }
   saveData(n);return n;
 }
 
+// ── UTILS ─────────────────────────────────────────────────────────────────────
 const today=()=>new Date().toISOString().slice(0,10);
 const nowTime=()=>new Date().toTimeString().slice(0,5);
 const newId=()=>Date.now()+Math.floor(Math.random()*999);
-const calcHours=(a,b)=>{if(!a||!b)return"";const[ah,am]=a.split(":").map(Number),[bh,bm]=b.split(":").map(Number),d=(bh*60+bm)-(ah*60+am);return d>0?`${Math.floor(d/60)}h ${d%60}m`:"";};
+const calcHours=(a,b)=>{if(!a||!b)return"";const[ah,am]=a.split(":").map(Number),[bh,bm]=b.split(":").map(Number),d=(bh*60+bm)-(ah*60+am);return d>0?`${Math.floor(d/60)}h ${d%60}m`:""};
 const roleColor=r=>({Admin:C.purple,Manager:C.accent,TL:C.orange,EMP:C.green,Guest:C.muted}[r]||C.muted);
 const priColor=p=>({High:C.red,Medium:C.yellow,Low:C.green}[p]||C.muted);
 const stColor=s=>({Pending:C.yellow,"In Progress":C.accent,Approved:C.green,Rejected:C.red,Done:C.green}[s]||C.muted);
 const lvColor=s=>({Pending:C.yellow,Approved:C.green,Rejected:C.red}[s]||C.muted);
-const CTYPES=["POST","CAROUSEL","REEL","RESEARCH","3D","VOICEOVER","SCRIPT","VIDEO","OTHER"];
-const PRIS=["High","Medium","Low"];
-const STATS=["Pending","In Progress","Done"];
-const LTYPES=["Casual","Sick","Earned","Unpaid","Work from Home"];
-const DEPTS=["Content","Design","Video","Marketing","Other"];
-const CATS=["Marketing","Design","Content","Tech","Food","Fashion","Travel","Regional","Other"];
 
-const Bdg=({label,color})=>(
-  <span style={{background:color+"18",color,padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap",border:`1px solid ${color}30`,display:"inline-block"}}>{label}</span>
-);
+// ── UI ATOMS ──────────────────────────────────────────────────────────────────
+const Bdg=({label,color})=><span style={{background:color+"18",color,padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap",border:`1px solid ${color}30`,display:"inline-block"}}>{label}</span>;
+
 const Btn=({children,onClick,color=C.accent,ghost,danger,full,sm,disabled})=>(
   <button disabled={disabled} onClick={onClick} style={{padding:sm?"5px 14px":"9px 20px",borderRadius:8,fontWeight:600,fontSize:sm?12:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.45:1,width:full?"100%":"auto",fontFamily:"inherit",border:ghost?`1px solid ${C.border2}`:danger?`1px solid ${C.red}30`:"none",background:ghost?C.white:danger?"rgba(225,29,72,.08)":disabled?"#e2e8f0":color,color:ghost?C.sub:danger?C.red:"#fff",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
     {children}
   </button>
 );
-const Inp=({label,value,onChange,placeholder,type="text",opts,rows,max,ro,hint})=>(
-  <div style={{marginBottom:14}}>
+
+const Inp=({label,value,onChange,placeholder,type="text",opts,rows,max,ro})=>(
+  <div style={{marginBottom:13}}>
     {label&&<div style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px"}}>{label}</div>}
     {opts
       ?<select value={value} onChange={e=>onChange(e.target.value)} disabled={ro} style={{width:"100%",background:ro?"#f8fafc":C.white,border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 11px",color:C.text,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}>
@@ -183,16 +213,24 @@ const Inp=({label,value,onChange,placeholder,type="text",opts,rows,max,ro,hint})
         ?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} maxLength={max||500} readOnly={ro} style={{width:"100%",background:ro?"#f8fafc":C.white,border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 11px",color:C.text,fontSize:13,outline:"none",resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}}/>
         :<input value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} type={type} maxLength={max||200} readOnly={ro} style={{width:"100%",background:ro?"#f8fafc":C.white,border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 11px",color:C.text,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
     }
-    {hint&&<div style={{fontSize:11,color:C.muted,marginTop:3}}>{hint}</div>}
   </div>
 );
-const Card=({children,style:s,onClick,left})=>(
-  <div onClick={onClick} style={{background:C.white,border:`1.5px solid ${C.border}`,borderRadius:10,padding:14,borderLeft:left?`4px solid ${left}`:undefined,boxShadow:"0 1px 4px rgba(0,0,0,.04)",transition:"box-shadow .2s",...s,cursor:onClick?"pointer":"default"}}>{children}</div>
+
+const ReadOnly=({label,value})=>(
+  <div style={{marginBottom:13}}>
+    <div style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px"}}>{label}</div>
+    <div style={{background:"#f8fafc",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 11px",fontSize:13,color:C.sub}}>{value}</div>
+  </div>
 );
+
+const Card=({children,style:s,onClick,left})=>(
+  <div onClick={onClick} style={{background:C.white,border:`1.5px solid ${left?left+"40":C.border}`,borderRadius:10,padding:14,borderLeft:left?`4px solid ${left}`:undefined,boxShadow:"0 1px 4px rgba(0,0,0,.04)",transition:"box-shadow .2s",...s,cursor:onClick?"pointer":"default"}}>{children}</div>
+);
+
 const Dlg=({title,onClose,children})=>(
   <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <div style={{background:C.white,borderRadius:14,width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,.3)"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",borderBottom:`1.5px solid ${C.border}`,background:"linear-gradient(90deg,#0F172A,#1E3A5F)",borderRadius:"14px 14px 0 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"15px 20px",borderBottom:`1.5px solid ${C.border}`,background:"linear-gradient(90deg,#0F172A,#1E3A5F)",borderRadius:"14px 14px 0 0"}}>
         <span style={{fontWeight:700,fontSize:14,color:"#fff"}}>{title}</span>
         <button onClick={onClose} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.15)",color:"rgba(255,255,255,.7)",fontSize:18,cursor:"pointer",padding:"2px 8px",borderRadius:6,lineHeight:1}}>&times;</button>
       </div>
@@ -200,15 +238,18 @@ const Dlg=({title,onClose,children})=>(
     </div>
   </div>
 );
+
 const Av=({name,color,size=32})=>(
-  <div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color},${color}99)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(9,Math.floor(size/3.5)),fontWeight:800,color:"#fff",flexShrink:0}}>{name}</div>
+  <div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color},${color}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(9,Math.floor(size/3.5)),fontWeight:800,color:"#fff",flexShrink:0}}>{name}</div>
 );
+
 const Empty=({icon,msg})=>(
   <div style={{textAlign:"center",padding:"36px 16px"}}>
     <div style={{fontSize:32,marginBottom:8,opacity:.4}}>{icon}</div>
     <div style={{fontSize:13,color:C.muted,fontWeight:500}}>{msg}</div>
   </div>
 );
+
 const Tabs=({tabs,active,onChange})=>(
   <div style={{display:"flex",gap:0,borderBottom:`1.5px solid ${C.border}`,marginBottom:16,overflowX:"auto",background:C.white,borderRadius:"10px 10px 0 0",padding:"0 4px"}}>
     {tabs.map(t=>(
@@ -218,10 +259,11 @@ const Tabs=({tabs,active,onChange})=>(
     ))}
   </div>
 );
+
 const Stats=({items})=>(
   <div style={{display:"grid",gridTemplateColumns:`repeat(${items.length},1fr)`,gap:10,marginBottom:16}}>
     {items.map(s=>(
-      <div key={s.l} style={{background:C.white,border:`1.5px solid ${s.c}20`,borderRadius:10,padding:"14px 16px",borderTop:`3px solid ${s.c}`,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+      <div key={s.l} style={{background:C.white,border:`1.5px solid ${s.c}20`,borderRadius:10,padding:"12px 14px",borderTop:`3px solid ${s.c}`,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
         <div style={{fontSize:10,color:C.muted,marginBottom:4,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px"}}>{s.l}</div>
         <div style={{fontSize:22,fontWeight:800,color:s.c,letterSpacing:"-1px",lineHeight:1}}>{s.v}</div>
       </div>
@@ -229,12 +271,49 @@ const Stats=({items})=>(
   </div>
 );
 
+// ── SUBMIT WORK FORM (shared by EMP and TL) ───────────────────────────────────
+function WorkSubmitForm({me,data,dispatch,isTL}){
+  const tl=data.users.find(u=>u.id===me.tlId);
+  const dept=me.dept||"Content";
+  const ctypes=getContentTypes(dept);
+  const[sDate,setSDate]=useState(today());
+  const[sType,setSType]=useState(ctypes[0]);
+  const[sCount,setSCount]=useState("1");
+  const[sPage,setSPage]=useState(IG_PAGES[0]);
+  const[sRemarks,setSRemarks]=useState("");
+
+  const submit=()=>{
+    if(!sDate||!sType||!sPage){alert("Fill all required fields");return;}
+    const count=parseInt(sCount)||1;
+    const tlName=isTL?me.name:(tl?.name||"");
+    const title=`${sType} ×${count} — ${sPage}`;
+    dispatch({type:"ADD_SUB",p:{id:newId(),empId:me.id,type:sType,title,link:sRemarks,taskId:null,status:"Pending",submittedAt:new Date().toLocaleString(),note:sRemarks}});
+    const notify=isTL?data.users.find(u=>u.role==="Manager"||u.role==="Admin"):tl;
+    if(notify)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:notify.id,fromName:me.name,msg:`📤 ${me.name}: ${sType} ×${count} on ${sPage}`,read:false,ts:new Date().toLocaleString()}});
+    syncToSheet("WORK_SUBMIT",{date:sDate,teamLeader:tlName,employeeName:me.name,contentType:sType,workCount:count,pageName:sPage,remarks:sRemarks});
+    setSCount("1");setSPage(IG_PAGES[0]);setSRemarks("");
+    alert("✅ Submitted & synced to Google Sheet!");
+  };
+
+  return(
+    <Card>
+      <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:16}}>📤 Submit Work</div>
+      <Inp label="Date" value={sDate} onChange={setSDate} type="date"/>
+      <ReadOnly label="Team Leader" value={isTL?`${me.name} (You)`:tl?.name||"—"}/>
+      <ReadOnly label="Employee Name" value={me.name}/>
+      <Inp label="Content Type" value={sType} onChange={setSType} opts={ctypes}/>
+      <Inp label="Work Count" value={sCount} onChange={setSCount} placeholder="e.g. 3" type="number"/>
+      <Inp label="Page Name" value={sPage} onChange={setSPage} opts={IG_PAGES}/>
+      <Inp label="Remarks / Links" value={sRemarks} onChange={setSRemarks} placeholder="Drive link, notes..." rows={2} max={SEC.NOTE_MAX}/>
+      <Btn onClick={submit} full>Submit to Sheet</Btn>
+    </Card>
+  );
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
 function Login({users,onLogin}){
-  const[sel,setSel]=useState("");
-  const[pin,setPin]=useState("");
-  const[err,setErr]=useState("");
-  const[tries,setTries]=useState(0);
-  const[locked,setLocked]=useState(false);
+  const[sel,setSel]=useState("");const[pin,setPin]=useState("");const[err,setErr]=useState("");
+  const[tries,setTries]=useState(0);const[locked,setLocked]=useState(false);
   const ref=useRef(null);
   useEffect(()=>()=>clearTimeout(ref.current),[]);
   const go=()=>{
@@ -256,14 +335,13 @@ function Login({users,onLogin}){
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 40%,#312E81 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"-apple-system,BlinkMacSystemFont,'Inter',sans-serif"}}>
       <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderRadius:20,padding:36,width:"100%",maxWidth:400,border:"1px solid rgba(255,255,255,0.12)",boxShadow:"0 32px 64px rgba(0,0,0,0.4)"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
-          <div style={{width:60,height:60,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(79,70,229,0.4)"}}>🏢</div>
-          <div style={{fontWeight:800,fontSize:24,color:"#fff",letterSpacing:"-.5px"}}>WooHoo Media</div>
-          <div style={{fontSize:13,color:"rgba(255,255,255,.45)",marginTop:4}}>Manipulating Internet</div>
+          <div style={{width:64,height:64,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(79,70,229,0.4)"}}>🎯</div>
+          <div style={{fontWeight:900,fontSize:26,color:"#fff",letterSpacing:"-.5px"}}>WooHoo Media</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginTop:5,letterSpacing:".5px"}}>Manipulating Internet</div>
         </div>
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>Account</div>
-          <select value={sel} onChange={e=>{setSel(e.target.value);setErr("");setPin("");}}
-            style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"11px 12px",color:sel?"#fff":"rgba(255,255,255,.4)",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",appearance:"none",cursor:"pointer"}}>
+          <select value={sel} onChange={e=>{setSel(e.target.value);setErr("");setPin("");}} style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"11px 12px",color:sel?"#fff":"rgba(255,255,255,.4)",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",appearance:"none",cursor:"pointer"}}>
             <option value="" style={{background:"#1E3A5F",color:"#fff"}}>— Choose account —</option>
             {users.map(u=><option key={u.id} value={u.id} style={{background:"#1E3A5F",color:"#fff"}}>{u.name} [{u.role}]</option>)}
             <option value="guest" style={{background:"#1E3A5F",color:"#fff"}}>👁 Guest (View Only)</option>
@@ -278,7 +356,7 @@ function Login({users,onLogin}){
               style={{width:"100%",background:"rgba(255,255,255,0.08)",border:`1px solid ${locked?"rgba(225,29,72,.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:16,outline:"none",boxSizing:"border-box",fontFamily:"inherit",letterSpacing:"4px"}}/>
           </div>
         )}
-        {sel==="guest"&&<div style={{background:"rgba(79,70,229,0.15)",border:"1px solid rgba(79,70,229,0.3)",borderRadius:10,padding:"10px 14px",fontSize:12,color:"rgba(165,180,252,1)",marginBottom:14,lineHeight:1.5}}>View-only access. You can message the Manager.</div>}
+        {sel==="guest"&&<div style={{background:"rgba(79,70,229,0.15)",border:"1px solid rgba(79,70,229,0.3)",borderRadius:10,padding:"10px 14px",fontSize:12,color:"rgba(165,180,252,1)",marginBottom:14}}>View-only access. You can message the Manager.</div>}
         {err&&<div style={{background:"rgba(225,29,72,0.15)",border:"1px solid rgba(225,29,72,0.3)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#FCA5A5",marginBottom:12}}>{err}</div>}
         <button disabled={locked||!sel} onClick={go} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:locked||!sel?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#4F46E5,#7C3AED)",color:locked||!sel?"rgba(255,255,255,.3)":"#fff",fontWeight:700,fontSize:14,cursor:locked||!sel?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:locked||!sel?"none":"0 4px 24px rgba(79,70,229,0.4)"}}>
           {sel==="guest"?"Enter as Guest →":"Sign In →"}
@@ -288,6 +366,7 @@ function Login({users,onLogin}){
   );
 }
 
+// ── BELL ──────────────────────────────────────────────────────────────────────
 function Bell({notifs,uid,onRead}){
   const[open,setOpen]=useState(false);
   const mine=notifs.filter(n=>n.toId===uid);
@@ -299,13 +378,13 @@ function Bell({notifs,uid,onRead}){
       </button>
       {open&&(
         <div style={{position:"absolute",right:0,top:44,background:C.white,border:`1.5px solid ${C.border}`,borderRadius:12,width:300,zIndex:200,boxShadow:"0 12px 40px rgba(0,0,0,.15)",overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:`1.5px solid ${C.border}`,fontWeight:700,fontSize:13,background:"linear-gradient(90deg,#0F172A,#1E3A5F)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{color:"#fff"}}>Notifications</span>
-            {unread>0&&<span onClick={()=>{mine.forEach(n=>onRead(n.id));setOpen(false);}} style={{color:"rgba(165,180,252,1)",fontSize:11,cursor:"pointer",fontWeight:400}}>Mark all read</span>}
+          <div style={{padding:"12px 16px",borderBottom:`1.5px solid ${C.border}`,background:"linear-gradient(90deg,#0F172A,#1E3A5F)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontWeight:700,fontSize:13,color:"#fff"}}>Notifications</span>
+            {unread>0&&<span onClick={()=>{mine.forEach(n=>onRead(n.id));setOpen(false);}} style={{color:"rgba(165,180,252,1)",fontSize:11,cursor:"pointer"}}>Mark all read</span>}
           </div>
           <div style={{maxHeight:300,overflowY:"auto"}}>
             {mine.length===0?<Empty icon="🔔" msg="All caught up"/>:mine.slice().reverse().map(n=>(
-              <div key={n.id} onClick={()=>onRead(n.id)} style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:n.read?C.white:C.accentL,cursor:"pointer",borderLeft:n.read?"none":`3px solid ${C.accent}`}}>
+              <div key={n.id} onClick={()=>onRead(n.id)} style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,background:n.read?C.white:C.accentL,cursor:"pointer",borderLeft:n.read?"none":`3px solid ${C.accent}`}}>
                 <div style={{fontSize:12,color:C.text,marginBottom:2,lineHeight:1.4,fontWeight:n.read?400:600}}>{n.msg}</div>
                 <div style={{fontSize:10,color:C.muted}}>{n.fromName} · {n.ts}</div>
               </div>
@@ -317,6 +396,7 @@ function Bell({notifs,uid,onRead}){
   );
 }
 
+// ── TASK CARD ─────────────────────────────────────────────────────────────────
 function TaskCard({task,users,me,dispatch,ro}){
   const[open,setOpen]=useState(false);
   const u=users.find(x=>x.id===task.assignedTo);
@@ -339,18 +419,14 @@ function TaskCard({task,users,me,dispatch,ro}){
       </div>
       {open&&canStatus&&(
         <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`,display:"flex",gap:6,flexWrap:"wrap"}} onClick={e=>e.stopPropagation()}>
-          {STATS.map(s=>(
-            <button key={s} onClick={()=>dispatch({type:"UPD_TASK",id:task.id,ch:{status:s}})}
-              style={{padding:"4px 10px",borderRadius:4,border:`1px solid ${stColor(s)}40`,background:task.status===s?stColor(s)+"18":"transparent",color:stColor(s),fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              {s}
-            </button>
-          ))}
+          {STATS.map(s=><button key={s} onClick={()=>dispatch({type:"UPD_TASK",id:task.id,ch:{status:s}})} style={{padding:"4px 10px",borderRadius:4,border:`1px solid ${stColor(s)}40`,background:task.status===s?stColor(s)+"18":"transparent",color:stColor(s),fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>)}
         </div>
       )}
     </Card>
   );
 }
 
+// ── SUB CARD ──────────────────────────────────────────────────────────────────
 function SubCard({sub,users,me,dispatch,ro}){
   const u=users.find(x=>x.id===sub.empId);
   const href=SEC.safeUrl(sub.link||"");
@@ -364,8 +440,7 @@ function SubCard({sub,users,me,dispatch,ro}){
           <div style={{fontWeight:600,fontSize:13,color:C.text}}>{sub.title}</div>
           <div style={{fontSize:11,color:C.muted,marginTop:1}}>{u?.name} · {sub.submittedAt}</div>
           {sub.note&&<div style={{fontSize:11,color:C.sub,marginTop:3}}>{sub.note}</div>}
-          {href?<a href={href} target="_blank" rel="noreferrer noopener" onClick={e=>e.stopPropagation()} style={{display:"inline-block",marginTop:6,fontSize:11,color:C.accent,textDecoration:"none",fontWeight:500}}>🔗 Open Link ↗</a>
-            :sub.link?<span style={{fontSize:11,color:C.muted,marginTop:4,display:"block"}}>⚠ Invalid link</span>:null}
+          {href?<a href={href} target="_blank" rel="noreferrer noopener" onClick={e=>e.stopPropagation()} style={{display:"inline-block",marginTop:6,fontSize:11,color:C.accent,textDecoration:"none",fontWeight:500}}>🔗 Open Link ↗</a>:sub.link?<span style={{fontSize:11,color:C.muted,marginTop:4,display:"block"}}>⚠ Invalid link</span>:null}
         </div>
       </div>
       {canApprove&&sub.status==="Pending"&&(
@@ -378,6 +453,7 @@ function SubCard({sub,users,me,dispatch,ro}){
   );
 }
 
+// ── ATTENDANCE BLOCK ──────────────────────────────────────────────────────────
 function AttBlock({data,me,dispatch,ro}){
   const[wfh,setWfh]=useState(false);
   const rec=data.attendance.find(a=>a.userId===me.id&&a.date===today());
@@ -385,17 +461,11 @@ function AttBlock({data,me,dispatch,ro}){
     const tl=data.users.find(u=>u.id===me.tlId);
     if(!rec){
       dispatch({type:"PUNCH_IN",p:{id:newId(),userId:me.id,date:today(),loginTime:nowTime(),logoutTime:"",hoursWorked:"",wfh}});
-      syncToSheet("ATTENDANCE",{
-        date:today(), employeeName:me.name, teamLeader:tl?.name||"",
-        loginTime:nowTime(), logoutTime:"", hoursWorked:"", wfh,
-      });
-    } else if(!rec.logoutTime){
+      syncToSheet("ATTENDANCE",{date:today(),employeeName:me.name,teamLeader:tl?.name||"",loginTime:nowTime(),logoutTime:"",hoursWorked:"",wfh});
+    }else if(!rec.logoutTime){
       const hw=calcHours(rec.loginTime,nowTime());
       dispatch({type:"PUNCH_OUT",id:rec.id,out:nowTime(),hw});
-      syncToSheet("ATTENDANCE",{
-        date:today(), employeeName:me.name, teamLeader:tl?.name||"",
-        loginTime:rec.loginTime, logoutTime:nowTime(), hoursWorked:hw, wfh:rec.wfh,
-      });
+      syncToSheet("ATTENDANCE",{date:today(),employeeName:me.name,teamLeader:tl?.name||"",loginTime:rec.loginTime,logoutTime:nowTime(),hoursWorked:hw,wfh:rec.wfh});
     }
   };
   const hist=data.attendance.filter(a=>a.userId===me.id).slice().reverse().slice(0,10);
@@ -405,11 +475,7 @@ function AttBlock({data,me,dispatch,ro}){
         <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:12}}>Today — {today()}</div>
         {!rec&&!ro&&(
           <div style={{display:"flex",gap:8,marginBottom:12}}>
-            {[false,true].map(w=>(
-              <button key={String(w)} onClick={()=>setWfh(w)} style={{flex:1,padding:"7px",borderRadius:6,border:`1px solid ${wfh===w?C.accent:C.border2}`,background:wfh===w?C.accentL:C.white,color:wfh===w?C.accent:C.sub,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
-                {w?"🏠 Work from Home":"🏢 Office"}
-              </button>
-            ))}
+            {[false,true].map(w=><button key={String(w)} onClick={()=>setWfh(w)} style={{flex:1,padding:"7px",borderRadius:6,border:`1px solid ${wfh===w?C.accent:C.border2}`,background:wfh===w?C.accentL:C.white,color:wfh===w?C.accent:C.sub,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{w?"🏠 Work from Home":"🏢 Office"}</button>)}
           </div>
         )}
         {rec&&<div style={{marginBottom:10}}><Bdg label={rec.wfh?"🏠 WFH":"🏢 Office"} color={rec.wfh?C.purple:C.accent}/></div>}
@@ -421,10 +487,7 @@ function AttBlock({data,me,dispatch,ro}){
             </div>
           ))}
         </div>
-        {!ro&&(rec?.logoutTime
-          ?<div style={{background:C.greenL,border:`1px solid ${C.green}30`,borderRadius:6,padding:"9px",textAlign:"center",fontSize:12,color:C.green,fontWeight:500}}>✅ Day complete</div>
-          :<Btn onClick={punch} color={rec?.loginTime?C.red:C.green} full>{rec?.loginTime?"🔴 Punch Out":"🟢 Punch In"}</Btn>
-        )}
+        {!ro&&(rec?.logoutTime?<div style={{background:C.greenL,border:`1px solid ${C.green}30`,borderRadius:6,padding:"9px",textAlign:"center",fontSize:12,color:C.green,fontWeight:500}}>✅ Day complete</div>:<Btn onClick={punch} color={rec?.loginTime?C.red:C.green} full>{rec?.loginTime?"🔴 Punch Out":"🟢 Punch In"}</Btn>)}
       </Card>
       <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Recent History</div>
       {hist.length===0?<Empty icon="🕐" msg="No records yet"/>:hist.map(a=>(
@@ -442,6 +505,7 @@ function AttBlock({data,me,dispatch,ro}){
   );
 }
 
+// ── LEAVE BLOCK ───────────────────────────────────────────────────────────────
 function LeaveBlock({data,me,dispatch,ro}){
   const[lt,setLt]=useState("apply");
   const[lFrom,setLFrom]=useState("");const[lTo,setLTo]=useState("");
@@ -454,25 +518,15 @@ function LeaveBlock({data,me,dispatch,ro}){
     const days=Math.max(1,Math.round((new Date(lTo)-new Date(lFrom))/864e5)+1);
     dispatch({type:"ADD_LEAVE",p:{id:newId(),userId:me.id,from:lFrom,to:lTo,days,reason,type:lType,status:"Pending",appliedAt:today(),reviewedBy:null}});
     const mgr=data.users.find(u=>u.role==="Manager"||u.role==="Admin");
-    if(mgr)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:mgr.id,fromName:me.name,msg:`🏖 Leave: ${me.name} ${lFrom}→${lTo} (${days}d)`,read:false,ts:new Date().toLocaleString()}});
+    if(mgr)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:mgr.id,fromName:me.name,msg:`🏖 Leave: ${me.name} ${lFrom}→${lTo} (${days}d, ${lType})`,read:false,ts:new Date().toLocaleString()}});
+    syncToSheet("LEAVE",{appliedAt:today(),employeeName:me.name,type:lType,from:lFrom,to:lTo,days,reason,status:"Pending",reviewedBy:""});
     setLFrom("");setLTo("");setLReason("");setLt("history");
   };
   return(
     <div>
       <Stats items={[{l:"Applied",v:myL.length,c:C.blue},{l:"Approved Days",v:myL.filter(l=>l.status==="Approved").reduce((s,l)=>s+l.days,0),c:C.green},{l:"Pending",v:myL.filter(l=>l.status==="Pending").length,c:C.yellow}]}/>
       {!ro&&<div style={{display:"flex",gap:8,marginBottom:12}}>{["apply","history"].map(t=><button key={t} onClick={()=>setLt(t)} style={{flex:1,padding:"7px",borderRadius:6,border:`1px solid ${lt===t?C.accent:C.border2}`,background:lt===t?C.accentL:C.white,color:lt===t?C.accent:C.sub,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t==="apply"?"+ Apply Leave":"My History"}</button>)}</div>}
-      {lt==="apply"&&!ro&&(
-        <Card>
-          <Inp label="Leave Type" value={lType} onChange={setLType} opts={LTYPES}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <Inp label="From" value={lFrom} onChange={setLFrom} type="date"/>
-            <Inp label="To" value={lTo} onChange={setLTo} type="date"/>
-          </div>
-          {lFrom&&lTo&&lTo>=lFrom&&<div style={{background:C.accentL,border:`1px solid ${C.accent}30`,borderRadius:6,padding:"7px 10px",fontSize:12,color:C.accent,marginBottom:10}}>{Math.max(1,Math.round((new Date(lTo)-new Date(lFrom))/864e5)+1)} day(s)</div>}
-          <Inp label="Reason" value={lReason} onChange={setLReason} placeholder="Brief reason..." rows={2} max={SEC.NOTE_MAX}/>
-          <Btn onClick={apply} full>Submit Leave Request</Btn>
-        </Card>
-      )}
+      {lt==="apply"&&!ro&&<Card><Inp label="Leave Type" value={lType} onChange={setLType} opts={LTYPES}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="From" value={lFrom} onChange={setLFrom} type="date"/><Inp label="To" value={lTo} onChange={setLTo} type="date"/></div>{lFrom&&lTo&&lTo>=lFrom&&<div style={{background:C.accentL,border:`1px solid ${C.accent}30`,borderRadius:6,padding:"7px 10px",fontSize:12,color:C.accent,marginBottom:10}}>{Math.max(1,Math.round((new Date(lTo)-new Date(lFrom))/864e5)+1)} day(s)</div>}<Inp label="Reason" value={lReason} onChange={setLReason} placeholder="Brief reason..." rows={2} max={SEC.NOTE_MAX}/><Btn onClick={apply} full>Submit Leave Request</Btn></Card>}
       {(lt==="history"||ro)&&(myL.length===0?<Empty icon="📋" msg="No leaves yet"/>:myL.slice().reverse().map(l=>(
         <Card key={l.id} style={{marginBottom:8}} left={lvColor(l.status)}>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:5}}><Bdg label={l.type} color={C.blue}/><Bdg label={l.status} color={lvColor(l.status)}/><Bdg label={`${l.days}d`} color={C.muted}/></div>
@@ -485,6 +539,7 @@ function LeaveBlock({data,me,dispatch,ro}){
   );
 }
 
+// ── INSTAGRAM SECTION ─────────────────────────────────────────────────────────
 function IgSection({data,dispatch,ro}){
   const[sel,setSel]=useState(data.igPages[0]?.id||null);
   const[q,setQ]=useState("");
@@ -494,7 +549,7 @@ function IgSection({data,dispatch,ro}){
   const pages=data.igPages.filter(p=>!q.trim()||p.name.toLowerCase().includes(q.toLowerCase())||p.handle.includes(q.toLowerCase()));
   const page=data.igPages.find(p=>p.id===sel);
   const addP=()=>{
-    const h=SEC.sanitize(nH.replace("@","").replace(/[^a-zA-Z0-9._]/g,""),SEC.HANDLE_MAX),n=SEC.sanitize(nN,SEC.NAME_MAX);
+    const h=SEC.sanitize(nH.replace("@","").replace(/[^a-zA-Z0-9._]/g,""),50),n=SEC.sanitize(nN,60);
     if(!h||!n){alert("Handle and name required");return;}
     const np={id:"ig"+newId(),handle:h,name:n,category:nC,avatar:n.slice(0,2).toUpperCase(),updatedAt:today()};
     dispatch({type:"ADD_IG",p:np});setSel(np.id);setNH("");setNN("");setShowAdd(false);
@@ -502,8 +557,7 @@ function IgSection({data,dispatch,ro}){
   return(
     <div style={{display:"flex",gap:0,border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.white}}>
       <div style={{width:185,flexShrink:0,borderRight:`1px solid ${C.border}`,background:"#F8FAFC",padding:10}}>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search pages..."
-          style={{width:"100%",background:C.white,border:`1px solid ${C.border2}`,borderRadius:6,padding:"6px 8px",color:C.text,fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",marginBottom:8}}/>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search pages..." style={{width:"100%",background:C.white,border:`1px solid ${C.border2}`,borderRadius:6,padding:"6px 8px",color:C.text,fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",marginBottom:8}}/>
         {pages.map(p=>(
           <div key={p.id} onClick={()=>setSel(p.id)} style={{padding:"8px 10px",borderRadius:7,marginBottom:4,cursor:"pointer",background:sel===p.id?C.white:"transparent",border:`1px solid ${sel===p.id?C.border:"transparent"}`,boxShadow:sel===p.id?"0 1px 3px rgba(0,0,0,.05)":"none"}}>
             <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:sel===p.id?7:0}}>
@@ -513,12 +567,10 @@ function IgSection({data,dispatch,ro}){
                 <div style={{fontSize:9,color:C.muted}}>@{p.handle}</div>
               </div>
             </div>
-            {sel===p.id&&(
-              <div style={{display:"flex",gap:4}}>
-                <a href={`https://www.instagram.com/${p.handle}`} target="_blank" rel="noreferrer noopener" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"4px 0",borderRadius:4,background:"linear-gradient(135deg,#833AB4,#FD1D1D)",color:"#fff",fontSize:9,fontWeight:700,textDecoration:"none"}}>📷 IG</a>
-                <a href={`https://www.socialblade.com/instagram/user/${p.handle}`} target="_blank" rel="noreferrer noopener" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"4px 0",borderRadius:4,background:C.accent,color:"#fff",fontSize:9,fontWeight:700,textDecoration:"none"}}>📊 SB</a>
-              </div>
-            )}
+            {sel===p.id&&<div style={{display:"flex",gap:4}}>
+              <a href={`https://www.instagram.com/${p.handle}`} target="_blank" rel="noreferrer noopener" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"4px 0",borderRadius:4,background:"linear-gradient(135deg,#833AB4,#FD1D1D)",color:"#fff",fontSize:9,fontWeight:700,textDecoration:"none"}}>📷 IG</a>
+              <a href={`https://www.socialblade.com/instagram/user/${p.handle}`} target="_blank" rel="noreferrer noopener" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"4px 0",borderRadius:4,background:C.accent,color:"#fff",fontSize:9,fontWeight:700,textDecoration:"none"}}>📊 SB</a>
+            </div>}
           </div>
         ))}
         {!ro&&<button onClick={()=>setShowAdd(true)} style={{width:"100%",padding:"6px",borderRadius:6,border:`1.5px dashed ${C.border2}`,background:"transparent",color:C.muted,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>+ Add Page</button>}
@@ -527,20 +579,18 @@ function IgSection({data,dispatch,ro}){
         {!page?<Empty icon="📱" msg="Select a page"/>:(
           <div>
             <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
-              <div style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#833AB4,#FD1D1D,#F77737)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#fff",flexShrink:0}}>{page.avatar}</div>
+              <div style={{width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#833AB4,#FD1D1D,#F77737)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}}>{page.avatar}</div>
               <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:C.text}}>{page.name}</div><div style={{fontSize:11,color:C.muted}}>@{page.handle} · {page.category}</div></div>
               {!ro&&<><Btn onClick={()=>setEditP({...page})} ghost sm>Edit</Btn><Btn onClick={()=>{if(window.confirm(`Remove ${page.name}?`)){const nx=data.igPages.find(p=>p.id!==page.id);dispatch({type:"DEL_IG",id:page.id});setSel(nx?.id||null);}}} danger sm>Remove</Btn></>}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <a href={`https://www.instagram.com/${page.handle}`} target="_blank" rel="noreferrer noopener"
-                style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:8,background:"linear-gradient(135deg,#833AB4,#FD1D1D,#F77737)",textDecoration:"none"}}>
-                <span style={{fontSize:20}}>📷</span>
+              <a href={`https://www.instagram.com/${page.handle}`} target="_blank" rel="noreferrer noopener" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:8,background:"linear-gradient(135deg,#833AB4,#FD1D1D,#F77737)",textDecoration:"none"}}>
+                <span style={{fontSize:22}}>📷</span>
                 <div><div style={{fontWeight:700,fontSize:13,color:"#fff"}}>Open Instagram</div><div style={{fontSize:10,color:"rgba(255,255,255,.7)",marginTop:1}}>instagram.com/{page.handle}</div></div>
                 <span style={{marginLeft:"auto",color:"rgba(255,255,255,.6)"}}>↗</span>
               </a>
-              <a href={`https://www.socialblade.com/instagram/user/${page.handle}`} target="_blank" rel="noreferrer noopener"
-                style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:8,background:C.accent,textDecoration:"none"}}>
-                <span style={{fontSize:20}}>📊</span>
+              <a href={`https://www.socialblade.com/instagram/user/${page.handle}`} target="_blank" rel="noreferrer noopener" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:8,background:C.accent,textDecoration:"none"}}>
+                <span style={{fontSize:22}}>📊</span>
                 <div><div style={{fontWeight:700,fontSize:13,color:"#fff"}}>View on SocialBlade</div><div style={{fontSize:10,color:"rgba(255,255,255,.7)",marginTop:1}}>socialblade.com/instagram/user/{page.handle}</div></div>
                 <span style={{marginLeft:"auto",color:"rgba(255,255,255,.6)"}}>↗</span>
               </a>
@@ -548,36 +598,18 @@ function IgSection({data,dispatch,ro}){
           </div>
         )}
       </div>
-      {showAdd&&<Dlg title="Add Instagram Page" onClose={()=>setShowAdd(false)}><Inp label="Handle (no @)" value={nH} onChange={setNH} placeholder="brandwave.in" max={SEC.HANDLE_MAX}/><Inp label="Display Name" value={nN} onChange={setNN} placeholder="BrandWave India" max={SEC.NAME_MAX}/><Inp label="Category" value={nC} onChange={setNC} opts={CATS}/><Btn onClick={addP} full>Add Page</Btn></Dlg>}
-      {editP&&<Dlg title={`Edit — ${editP.name}`} onClose={()=>setEditP(null)}><Inp label="Display Name" value={editP.name} onChange={v=>setEditP(p=>({...p,name:v}))} max={SEC.NAME_MAX}/><Inp label="Handle (no @)" value={editP.handle} onChange={v=>setEditP(p=>({...p,handle:v}))} max={SEC.HANDLE_MAX}/><Inp label="Category" value={editP.category} onChange={v=>setEditP(p=>({...p,category:v}))} opts={CATS}/><div style={{display:"flex",gap:8}}><Btn onClick={()=>{const h=SEC.sanitize(editP.handle.replace("@","").replace(/[^a-zA-Z0-9._]/g,""),50),n=SEC.sanitize(editP.name,60);if(!h||!n){alert("Required");return;}dispatch({type:"UPD_IG",id:editP.id,ch:{name:n,handle:h,category:editP.category,avatar:n.slice(0,2).toUpperCase()}});setEditP(null);}} full>Save</Btn><Btn onClick={()=>setEditP(null)} ghost full>Cancel</Btn></div></Dlg>}
+      {showAdd&&<Dlg title="Add Instagram Page" onClose={()=>setShowAdd(false)}><Inp label="Handle (no @)" value={nH} onChange={setNH} placeholder="brandwave.in" max={50}/><Inp label="Display Name" value={nN} onChange={setNN} placeholder="BrandWave India" max={60}/><Inp label="Category" value={nC} onChange={setNC} opts={CATS}/><Btn onClick={addP} full>Add Page</Btn></Dlg>}
+      {editP&&<Dlg title={`Edit — ${editP.name}`} onClose={()=>setEditP(null)}><Inp label="Display Name" value={editP.name} onChange={v=>setEditP(p=>({...p,name:v}))} max={60}/><Inp label="Handle (no @)" value={editP.handle} onChange={v=>setEditP(p=>({...p,handle:v}))} max={50}/><Inp label="Category" value={editP.category} onChange={v=>setEditP(p=>({...p,category:v}))} opts={CATS}/><div style={{display:"flex",gap:8}}><Btn onClick={()=>{const h=SEC.sanitize(editP.handle.replace("@","").replace(/[^a-zA-Z0-9._]/g,""),50),n=SEC.sanitize(editP.name,60);if(!h||!n){alert("Required");return;}dispatch({type:"UPD_IG",id:editP.id,ch:{name:n,handle:h,category:editP.category,avatar:n.slice(0,2).toUpperCase()}});setEditP(null);}} full>Save</Btn><Btn onClick={()=>setEditP(null)} ghost full>Cancel</Btn></div></Dlg>}
     </div>
   );
 }
 
+// ── EMPLOYEE DASHBOARD ────────────────────────────────────────────────────────
 function EmpDash({data,me,dispatch}){
   const[tab,setTab]=useState("tasks");
-  const[sType,setSType]=useState("POST");const[sTitle,setSTitle]=useState("");const[sLink,setSLink]=useState("");const[sNote,setSNote]=useState("");
   const myT=data.tasks.filter(t=>t.assignedTo===me.id);
   const myS=data.submissions.filter(s=>s.empId===me.id);
   const myN=data.notifications.filter(n=>n.toId===me.id);
-  const submit=()=>{
-    const title=SEC.sanitize(sTitle,SEC.TITLE_MAX),link=SEC.sanitize(sLink,SEC.LINK_MAX),note=SEC.sanitize(sNote,SEC.NOTE_MAX);
-    if(!title){alert("Enter a title");return;}
-    dispatch({type:"ADD_SUB",p:{id:newId(),empId:me.id,type:sType,title,link,taskId:null,status:"Pending",submittedAt:new Date().toLocaleString(),note}});
-    const tl=data.users.find(u=>u.id===me.tlId);
-    if(tl)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:tl.id,fromName:me.name,msg:`📤 ${me.name} submitted: ${title}`,read:false,ts:new Date().toLocaleString()}});
-    // ── Sync to Google Sheet ──
-    syncToSheet("WORK_SUBMIT",{
-      date: today(),
-      teamLeader: tl?.name || "",
-      employeeName: me.name,
-      contentType: sType,
-      workCount: 1,
-      pageName: title,
-      remarks: link || note || "",
-    });
-    setSTitle("");setSLink("");setSNote("");setTab("subs");
-  };
   const pend=myT.filter(t=>t.status!=="Done").length;
   const unrd=myN.filter(n=>!n.read).length;
   const TABS=[{k:"tasks",label:`Tasks${pend>0?` (${pend})`:""}`},{k:"submit",label:"Submit Work"},{k:"subs",label:"My Work"},{k:"att",label:"Attendance"},{k:"leave",label:"Leave"},{k:"ig",label:"Instagram"},{k:"alerts",label:`Alerts${unrd>0?` (${unrd})`:""}`}];
@@ -586,7 +618,7 @@ function EmpDash({data,me,dispatch}){
       <Stats items={[{l:"Tasks",v:myT.length,c:C.accent},{l:"Pending",v:myT.filter(t=>t.status==="Pending").length,c:C.yellow},{l:"In Progress",v:myT.filter(t=>t.status==="In Progress").length,c:C.blue},{l:"Done",v:myT.filter(t=>t.status==="Done").length,c:C.green}]}/>
       <Tabs tabs={TABS} active={tab} onChange={setTab}/>
       {tab==="tasks"&&(myT.length===0?<Empty icon="📋" msg="No tasks assigned yet"/>:myT.slice().reverse().map(t=><TaskCard key={t.id} task={t} users={data.users} me={me} dispatch={dispatch}/>))}
-      {tab==="submit"&&<Card><div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Submit Your Work</div><Inp label="Work Type" value={sType} onChange={setSType} opts={CTYPES}/><Inp label="Title" value={sTitle} onChange={setSTitle} placeholder="e.g. Maharashtra Reel #1" max={SEC.TITLE_MAX}/><Inp label="Link (Drive / Canva / YouTube)" value={sLink} onChange={setSLink} placeholder="https://..." max={SEC.LINK_MAX}/><Inp label="Notes for TL" value={sNote} onChange={setSNote} placeholder="Any notes..." rows={2} max={SEC.NOTE_MAX}/><Btn onClick={submit} full>Submit</Btn></Card>}
+      {tab==="submit"&&<WorkSubmitForm me={me} data={data} dispatch={dispatch} isTL={false}/>}
       {tab==="subs"&&(myS.length===0?<Empty icon="📁" msg="No submissions yet"/>:myS.slice().reverse().map(s=><SubCard key={s.id} sub={s} users={data.users} me={me} dispatch={dispatch}/>))}
       {tab==="att"&&<AttBlock data={data} me={me} dispatch={dispatch}/>}
       {tab==="leave"&&<LeaveBlock data={data} me={me} dispatch={dispatch}/>}
@@ -602,36 +634,39 @@ function EmpDash({data,me,dispatch}){
   );
 }
 
+// ── TL DASHBOARD ──────────────────────────────────────────────────────────────
 function TLDash({data,me,dispatch}){
   const[tab,setTab]=useState("mytasks");
-  const[aTitle,setATitle]=useState("");const[aType,setAType]=useState("POST");const[aPri,setAPri]=useState("Medium");
-  const[aTo,setATo]=useState("");const[aDue,setADue]=useState("");const[aNote,setANote]=useState("");
+  const[aTitle,setATitle]=useState("");const[aType,setAType]=useState(getContentTypes(me.dept||"Content")[0]);
+  const[aPri,setAPri]=useState("Medium");const[aTo,setATo]=useState("");const[aDue,setADue]=useState("");const[aNote,setANote]=useState("");
   const myTeam=data.users.filter(u=>u.tlId===me.id);
   const toMe=data.tasks.filter(t=>t.assignedTo===me.id);
   const byMe=data.tasks.filter(t=>t.assignedBy===me.id);
   const tSubs=data.submissions.filter(s=>myTeam.map(u=>u.id).includes(s.empId));
+  const ctypes=getContentTypes(me.dept||"Content");
   const assign=()=>{
-    const title=SEC.sanitize(aTitle,SEC.TITLE_MAX),note=SEC.sanitize(aNote,SEC.NOTE_MAX);
+    const title=SEC.sanitize(aTitle,120),note=SEC.sanitize(aNote,500);
     if(!title||!aTo||!aDue){alert("Fill title, assignee and due date");return;}
     dispatch({type:"ADD_TASK",p:{id:newId(),title,type:aType,priority:aPri,assignedTo:Number(aTo),assignedBy:me.id,dueDate:aDue,status:"Pending",note,createdAt:today()}});
     dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:Number(aTo),fromName:me.name,msg:`${aPri==="High"?"🔴 PRIORITY":"📌"}: ${title} — due ${aDue}`,read:false,ts:new Date().toLocaleString()}});
     setATitle("");setANote("");setADue("");setTab("teamtasks");
   };
   const pend=toMe.filter(t=>t.status!=="Done").length;
-  const TABS=[{k:"mytasks",label:`My Tasks${pend>0?` (${pend})`:""}`},{k:"assign",label:"Assign"},{k:"teamtasks",label:"Team Tasks"},{k:"review",label:`Review (${tSubs.filter(s=>s.status==="Pending").length})`},{k:"team",label:"Team"},{k:"att",label:"Attendance"},{k:"leave",label:"Leave"}];
+  const TABS=[{k:"mytasks",label:`My Tasks${pend>0?` (${pend})`:""}`},{k:"mywork",label:"Submit My Work"},{k:"assign",label:"Assign"},{k:"teamtasks",label:"Team Tasks"},{k:"review",label:`Review (${tSubs.filter(s=>s.status==="Pending").length})`},{k:"team",label:"Team"},{k:"att",label:"Attendance"},{k:"leave",label:"Leave"}];
   return(
     <div>
       <Stats items={[{l:"My Tasks",v:toMe.length,c:C.orange},{l:"Team Tasks",v:byMe.length,c:C.accent},{l:"Pending Review",v:tSubs.filter(s=>s.status==="Pending").length,c:C.yellow},{l:"Team Size",v:myTeam.length,c:C.purple}]}/>
       <Tabs tabs={TABS} active={tab} onChange={setTab}/>
       {tab==="mytasks"&&(toMe.length===0?<Empty icon="🎯" msg="No tasks from manager"/>:toMe.slice().reverse().map(t=><TaskCard key={t.id} task={t} users={data.users} me={me} dispatch={dispatch}/>))}
+      {tab==="mywork"&&<WorkSubmitForm me={me} data={data} dispatch={dispatch} isTL={true}/>}
       {tab==="assign"&&(
         <Card>
           <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Assign Task to Team Member</div>
-          <Inp label="Task Title" value={aTitle} onChange={setATitle} placeholder="e.g. Create 3 Reels" max={SEC.TITLE_MAX}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Type" value={aType} onChange={setAType} opts={CTYPES}/><Inp label="Priority" value={aPri} onChange={setAPri} opts={PRIS}/></div>
+          <Inp label="Task Title" value={aTitle} onChange={setATitle} placeholder="Task description..." max={120}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Type" value={aType} onChange={setAType} opts={ctypes}/><Inp label="Priority" value={aPri} onChange={setAPri} opts={PRIS}/></div>
           {myTeam.length>0?<Inp label="Assign To" value={aTo} onChange={setATo} opts={[{v:"",l:"— Select —"},...myTeam.map(u=>({v:u.id,l:u.name}))]}/>:<div style={{background:C.yellowL,border:`1px solid ${C.yellow}30`,borderRadius:6,padding:"8px 12px",fontSize:12,color:C.yellow,marginBottom:10}}>No team members yet.</div>}
           <Inp label="Due Date" value={aDue} onChange={setADue} type="date"/>
-          <Inp label="Notes" value={aNote} onChange={setANote} placeholder="Instructions..." rows={2} max={SEC.NOTE_MAX}/>
+          <Inp label="Notes" value={aNote} onChange={setANote} placeholder="Instructions..." rows={2} max={500}/>
           <Btn onClick={assign} full disabled={myTeam.length===0||!aTo}>Assign &amp; Notify</Btn>
         </Card>
       )}
@@ -640,19 +675,7 @@ function TLDash({data,me,dispatch}){
       {tab==="team"&&(myTeam.length===0?<Empty icon="👥" msg="No team members"/>:myTeam.map(emp=>{
         const et=data.tasks.filter(t=>t.assignedTo===emp.id),dn=et.filter(t=>t.status==="Done").length,pc=et.length?Math.round(dn/et.length*100):0;
         const at=data.attendance.find(a=>a.userId===emp.id&&a.date===today());
-        return(
-          <Card key={emp.id} style={{marginBottom:8,padding:"10px 14px"}}>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <Av name={emp.avatar} color={C.green} size={36}/>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:600,color:C.text,fontSize:13}}>{emp.name} <Bdg label="EMP" color={C.green}/></div>
-                <div style={{fontSize:11,color:at?C.green:C.muted,marginTop:2}}>{at?`🟢 ${at.wfh?"WFH":"Office"} · In ${at.loginTime}`:"⚪ Not in today"}</div>
-                <div style={{height:3,borderRadius:3,background:C.border,marginTop:6}}><div style={{width:`${pc}%`,height:3,borderRadius:3,background:C.green}}/></div>
-                <div style={{fontSize:10,color:C.muted,marginTop:2}}>{dn}/{et.length} tasks · {pc}%</div>
-              </div>
-            </div>
-          </Card>
-        );
+        return(<Card key={emp.id} style={{marginBottom:8,padding:"10px 14px"}}><div style={{display:"flex",gap:10,alignItems:"center"}}><Av name={emp.avatar} color={C.green} size={36}/><div style={{flex:1}}><div style={{fontWeight:600,color:C.text,fontSize:13}}>{emp.name} <Bdg label="EMP" color={C.green}/></div><div style={{fontSize:11,color:at?C.green:C.muted,marginTop:2}}>{at?`🟢 ${at.wfh?"WFH":"Office"} · In ${at.loginTime}`:"⚪ Not in today"}</div><div style={{height:3,borderRadius:3,background:C.border,marginTop:6}}><div style={{width:`${pc}%`,height:3,borderRadius:3,background:C.green}}/></div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{dn}/{et.length} tasks · {pc}%</div></div></div></Card>);
       }))}
       {tab==="att"&&<AttBlock data={data} me={me} dispatch={dispatch}/>}
       {tab==="leave"&&<LeaveBlock data={data} me={me} dispatch={dispatch}/>}
@@ -660,19 +683,19 @@ function TLDash({data,me,dispatch}){
   );
 }
 
+// ── MANAGER / ADMIN / GUEST DASHBOARD ─────────────────────────────────────────
 function MgrDash({data,me,dispatch,ro}){
   const[tab,setTab]=useState("overview");
-  const[atT,setAtT]=useState("");const[atTy,setAtTy]=useState("POST");const[atPr,setAtPr]=useState("High");const[atTo,setAtTo]=useState("");const[atD,setAtD]=useState("");const[atN,setAtN]=useState("");
+  const[atT,setAtT]=useState("");const[atTy,setAtTy]=useState("Carousel");const[atPr,setAtPr]=useState("High");const[atTo,setAtTo]=useState("");const[atD,setAtD]=useState("");const[atN,setAtN]=useState("");
   const[ann,setAnn]=useState("");
   const[uN,setUN]=useState("");const[uR,setUR]=useState("EMP");const[uD,setUD]=useState("Content");const[uTL,setUTL]=useState("");const[uP,setUP]=useState("");
   const[lF,setLF]=useState("Pending");
   const[aD,setAD]=useState(today());const[aU,setAU]=useState("all");const[fixA,setFixA]=useState(null);
   const[editU,setEditU]=useState(null);
   const[cp,setCp]=useState({old:"",n1:"",n2:""});
-  const[gMsg,setGMsg]=useState("");
   const[myName,setMyName]=useState(me.name);
   const[myDept,setMyDept]=useState(me.dept);
-  const mgrs=data.users.filter(u=>u.role==="Manager");
+  const[gMsg,setGMsg]=useState("");
   const tls=data.users.filter(u=>u.role==="TL");
   const emps=data.users.filter(u=>u.role==="EMP");
   const nonMgr=data.users.filter(u=>u.role!=="Manager"&&u.role!=="Admin");
@@ -682,22 +705,23 @@ function MgrDash({data,me,dispatch,ro}){
   const fLeaves=lF==="All"?data.leaves:data.leaves.filter(l=>l.status===lF);
   const guestMsgs=(data.messages||[]).filter(m=>m.toId===me.id);
   const isGuest=me.role==="Guest";
+  const isAdmin=me.role==="Admin";
 
   const doAssignTL=()=>{
-    const title=SEC.sanitize(atT,SEC.TITLE_MAX),note=SEC.sanitize(atN,SEC.NOTE_MAX);
+    const title=SEC.sanitize(atT,120),note=SEC.sanitize(atN,500);
     if(!title||!atTo||!atD){alert("Fill all fields");return;}
     dispatch({type:"ADD_TASK",p:{id:newId(),title,type:atTy,priority:atPr,assignedTo:Number(atTo),assignedBy:me.id,dueDate:atD,status:"Pending",note,createdAt:today()}});
-    dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:Number(atTo),fromName:me.name,msg:`🔴 ${title} — due ${atD}`,read:false,ts:new Date().toLocaleString()}});
+    dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:Number(atTo),fromName:me.name,msg:`🔴 ${me.name}: ${title} — due ${atD}`,read:false,ts:new Date().toLocaleString()}});
     setAtT("");setAtN("");setAtD("");setAtTo("");
   };
   const doAnn=()=>{
-    const msg=SEC.sanitize(ann,SEC.MSG_MAX);if(!msg)return;
+    const msg=SEC.sanitize(ann,400);if(!msg)return;
     dispatch({type:"ADD_ANN",p:{id:newId(),from:me.name,msg,ts:new Date().toLocaleString()}});
     data.users.filter(u=>u.id!==me.id).forEach(u=>dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:u.id,fromName:me.name,msg:`📢 ${msg}`,read:false,ts:new Date().toLocaleString()}}));
     setAnn("");
   };
   const doAddUser=()=>{
-    const name=SEC.sanitize(uN,SEC.NAME_MAX);
+    const name=SEC.sanitize(uN,60);
     if(!name||!uP){alert("Name and PIN required");return;}
     if(!SEC.validPin(uP)){alert("PIN must be 4–8 digits");return;}
     if(data.users.some(u=>u.pin===uP)){alert("PIN taken");return;}
@@ -708,7 +732,10 @@ function MgrDash({data,me,dispatch,ro}){
   const doRevLeave=(id,st)=>{
     dispatch({type:"REV_LEAVE",id,st,by:me.name});
     const l=data.leaves.find(x=>x.id===id);
-    if(l)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:l.userId,fromName:me.name,msg:`${st==="Approved"?"✅":"❌"} Leave ${l.from}→${l.to} ${st}`,read:false,ts:new Date().toLocaleString()}});
+    if(l){
+      dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:l.userId,fromName:me.name,msg:`${st==="Approved"?"✅":"❌"} Leave ${l.from}→${l.to} ${st}`,read:false,ts:new Date().toLocaleString()}});
+      syncToSheet("LEAVE",{appliedAt:l.appliedAt,employeeName:data.users.find(u=>u.id===l.userId)?.name||"",type:l.type,from:l.from,to:l.to,days:l.days,reason:l.reason,status:st,reviewedBy:me.name});
+    }
   };
   const doChangePin=()=>{
     if(!cp.old||!cp.n1||!cp.n2){alert("Fill all fields");return;}
@@ -720,7 +747,7 @@ function MgrDash({data,me,dispatch,ro}){
     me.pin=cp.n1;setCp({old:"",n1:"",n2:""});alert("PIN updated!");
   };
   const doGuestMsg=()=>{
-    const msg=SEC.sanitize(gMsg,SEC.MSG_MAX);if(!msg)return;
+    const msg=SEC.sanitize(gMsg,400);if(!msg)return;
     const mgr=data.users.find(u=>u.role==="Manager"||u.role==="Admin");
     dispatch({type:"ADD_MSG",p:{id:newId(),fromId:"guest",fromName:"Guest",toId:mgr?.id,msg,ts:new Date().toLocaleString(),read:false}});
     if(mgr)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:mgr.id,fromName:"Guest",msg:`💬 Guest: ${msg}`,read:false,ts:new Date().toLocaleString()}});
@@ -733,7 +760,7 @@ function MgrDash({data,me,dispatch,ro}){
     {k:"team",label:"Team"},{k:"ig",label:"Instagram"},{k:"announce",label:"Announce"},
     ...(isGuest?[{k:"message",label:"Message Manager"}]:[]),
     ...(!ro&&guestMsgs.length>0?[{k:"inbox",label:`Inbox${guestMsgs.filter(m=>!m.read).length>0?` (${guestMsgs.filter(m=>!m.read).length})`:""}`}]:[]),
-    ...(me.role==="Admin"?[{k:"adminpanel",label:"⚙ Admin Panel"}]:[]),
+    ...(isAdmin?[{k:"adminpanel",label:"⚙ Admin"}]:[]),
     ...(!ro?[{k:"account",label:"My Account"}]:[]),
   ];
 
@@ -744,24 +771,12 @@ function MgrDash({data,me,dispatch,ro}){
 
       {tab==="overview"&&(
         <div>
-          {["Content","Design","Video"].map(dept=>{
+          {["Content","Video","Research"].map(dept=>{
             const dt=data.tasks.filter(t=>{const u=data.users.find(x=>x.id===t.assignedTo);return u?.dept===dept;});
             const dn=dt.filter(t=>t.status==="Done").length,pc=dt.length?Math.round(dn/dt.length*100):0;
-            return(
-              <Card key={dept} style={{marginBottom:8,padding:"12px 14px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,alignItems:"center"}}><span style={{fontWeight:600,color:C.text,fontSize:13}}>{dept}</span><span style={{color:C.accent,fontWeight:700}}>{pc}%</span></div>
-                <div style={{height:4,borderRadius:4,background:C.border}}><div style={{width:`${pc}%`,height:4,borderRadius:4,background:C.accent,transition:"width 1s ease"}}/></div>
-                <div style={{fontSize:11,color:C.muted,marginTop:4}}>{dn} of {dt.length} tasks done</div>
-              </Card>
-            );
+            return(<Card key={dept} style={{marginBottom:8,padding:"12px 14px"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8,alignItems:"center"}}><span style={{fontWeight:600,color:C.text,fontSize:13}}>{dept}</span><span style={{color:C.accent,fontWeight:700}}>{pc}%</span></div><div style={{height:4,borderRadius:4,background:C.border}}><div style={{width:`${pc}%`,height:4,borderRadius:4,background:C.accent,transition:"width 1s ease"}}/></div><div style={{fontSize:11,color:C.muted,marginTop:4}}>{dn} of {dt.length} tasks done</div></Card>);
           })}
-          {data.announcements.slice(-1).map(a=>(
-            <Card key={a.id} style={{marginTop:8,padding:"12px 14px"}} left={C.accent}>
-              <div style={{fontSize:11,fontWeight:600,color:C.accent,marginBottom:4}}>Latest Announcement</div>
-              <div style={{fontSize:13,color:C.text}}>{a.msg}</div>
-              <div style={{fontSize:10,color:C.muted,marginTop:4}}>{a.from} · {a.ts}</div>
-            </Card>
-          ))}
+          {data.announcements.slice(-1).map(a=><Card key={a.id} style={{marginTop:8,padding:"12px 14px"}} left={C.accent}><div style={{fontSize:11,fontWeight:600,color:C.accent,marginBottom:4}}>Latest Announcement</div><div style={{fontSize:13,color:C.text}}>{a.msg}</div><div style={{fontSize:10,color:C.muted,marginTop:4}}>{a.from} · {a.ts}</div></Card>)}
         </div>
       )}
 
@@ -769,11 +784,11 @@ function MgrDash({data,me,dispatch,ro}){
         <div>
           {!ro&&<Card style={{marginBottom:14}}>
             <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Assign Task to [TL]</div>
-            <Inp label="Title" value={atT} onChange={setAtT} placeholder="Task title..." max={SEC.TITLE_MAX}/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Type" value={atTy} onChange={setAtTy} opts={CTYPES}/><Inp label="Priority" value={atPr} onChange={setAtPr} opts={PRIS}/></div>
-            <Inp label="Assign To [TL]" value={atTo} onChange={setAtTo} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:u.name}))]}/>
+            <Inp label="Title" value={atT} onChange={setAtT} placeholder="Task title..." max={120}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Type" value={atTy} onChange={setAtTy} opts={["Carousel","Static","Main Video","Top 5 News","Complete Scripts","Research","Voiceover"]}/><Inp label="Priority" value={atPr} onChange={setAtPr} opts={PRIS}/></div>
+            <Inp label="Assign To [TL]" value={atTo} onChange={setAtTo} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>
             <Inp label="Due Date" value={atD} onChange={setAtD} type="date"/>
-            <Inp label="Notes" value={atN} onChange={setAtN} placeholder="Instructions..." rows={2} max={SEC.NOTE_MAX}/>
+            <Inp label="Notes" value={atN} onChange={setAtN} placeholder="Instructions..." rows={2} max={500}/>
             <Btn onClick={doAssignTL} full>Assign &amp; Notify</Btn>
           </Card>}
           {data.tasks.length===0?<Empty icon="📋" msg="No tasks yet"/>:data.tasks.slice().reverse().map(t=><TaskCard key={t.id} task={t} users={data.users} me={me} dispatch={dispatch} ro={ro}/>)}
@@ -785,38 +800,18 @@ function MgrDash({data,me,dispatch,ro}){
       {tab==="att"&&(
         <div>
           <Stats items={[{l:"In Office",v:todayA.filter(a=>!a.wfh&&a.loginTime&&!a.logoutTime).length,c:C.green},{l:"WFH",v:todayA.filter(a=>a.wfh&&!a.logoutTime).length,c:C.purple},{l:"Checked Out",v:todayA.filter(a=>a.logoutTime).length,c:C.red},{l:"Absent",v:nonMgr.length-todayA.length,c:C.muted}]}/>
-          <Card style={{marginBottom:10}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <Inp label="Date" value={aD} onChange={setAD} type="date"/>
-              <Inp label="Employee" value={aU} onChange={setAU} opts={[{v:"all",l:"All"},...nonMgr.map(u=>({v:u.id,l:u.name}))]}/>
-            </div>
-          </Card>
+          <Card style={{marginBottom:10}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Date" value={aD} onChange={setAD} type="date"/><Inp label="Employee" value={aU} onChange={setAU} opts={[{v:"all",l:"All"},...nonMgr.map(u=>({v:u.id,l:u.name}))]}/></div></Card>
           {fAtt.length===0?<Empty icon="🕐" msg="No records"/>:fAtt.slice().reverse().map(a=>{
             const u=data.users.find(x=>x.id===a.userId);
-            return(
-              <Card key={a.id} style={{marginBottom:6,padding:"10px 14px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:6}}>{u?.name} <Bdg label={a.wfh?"WFH":"Office"} color={a.wfh?C.purple:C.green}/></div>
-                    <div style={{fontSize:11,color:C.muted,marginTop:2}}>{a.date} · 🟢{a.loginTime} → 🔴{a.logoutTime||"—"}</div>
-                  </div>
-                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    {a.hoursWorked?<Bdg label={a.hoursWorked} color={C.green}/>:<Bdg label={a.loginTime?"Active":"—"} color={C.yellow}/>}
-                    {!ro&&<button onClick={()=>setFixA({...a})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Fix</button>}
-                  </div>
-                </div>
-              </Card>
-            );
+            return(<Card key={a.id} style={{marginBottom:6,padding:"10px 14px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:12,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:6}}>{u?.name} <Bdg label={a.wfh?"WFH":"Office"} color={a.wfh?C.purple:C.green}/></div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{a.date} · 🟢{a.loginTime} → 🔴{a.logoutTime||"—"}</div></div><div style={{display:"flex",gap:6,alignItems:"center"}}>{a.hoursWorked?<Bdg label={a.hoursWorked} color={C.green}/>:<Bdg label={a.loginTime?"Active":"—"} color={C.yellow}/>}{!ro&&<button onClick={()=>setFixA({...a})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Fix</button>}</div></div></Card>);
           })}
           {fixA&&<Dlg title="Fix Attendance Record" onClose={()=>setFixA(null)}>
             <div style={{background:"#F8FAFC",borderRadius:6,padding:"10px 12px",marginBottom:12,fontSize:12,color:C.sub}}>Editing: <strong>{data.users.find(u=>u.id===fixA.userId)?.name}</strong> on {fixA.date}</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <Inp label="Login Time" value={fixA.loginTime||""} onChange={v=>setFixA(p=>({...p,loginTime:v}))} type="time"/>
-              <Inp label="Logout Time" value={fixA.logoutTime||""} onChange={v=>setFixA(p=>({...p,logoutTime:v}))} type="time"/>
-            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Login Time" value={fixA.loginTime||""} onChange={v=>setFixA(p=>({...p,loginTime:v}))} type="time"/><Inp label="Logout Time" value={fixA.logoutTime||""} onChange={v=>setFixA(p=>({...p,logoutTime:v}))} type="time"/></div>
             <Inp label="Type" value={fixA.wfh?"wfh":"office"} onChange={v=>setFixA(p=>({...p,wfh:v==="wfh"}))} opts={[{v:"office",l:"🏢 Office"},{v:"wfh",l:"🏠 Work from Home"}]}/>
+            <div style={{fontSize:11,color:C.accent,background:C.accentL,border:`1px solid ${C.accent}30`,borderRadius:6,padding:"7px 10px",marginBottom:12}}>Hours will recalculate automatically.</div>
             <div style={{display:"flex",gap:8}}>
-              <Btn onClick={()=>{const hw=fixA.logoutTime?calcHours(fixA.loginTime,fixA.logoutTime):"";dispatch({type:"FIX_ATT",id:fixA.id,ch:{loginTime:fixA.loginTime,logoutTime:fixA.logoutTime,hoursWorked:hw,wfh:fixA.wfh}});dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:fixA.userId,fromName:me.name,msg:`🔧 Attendance on ${fixA.date} corrected by ${me.name}`,read:false,ts:new Date().toLocaleString()}});setFixA(null);}} full>Save</Btn>
+              <Btn onClick={()=>{const hw=fixA.logoutTime?calcHours(fixA.loginTime,fixA.logoutTime):"";dispatch({type:"FIX_ATT",id:fixA.id,ch:{loginTime:fixA.loginTime,logoutTime:fixA.logoutTime,hoursWorked:hw,wfh:fixA.wfh}});dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:fixA.userId,fromName:me.name,msg:`🔧 Attendance on ${fixA.date} corrected by ${me.name}`,read:false,ts:new Date().toLocaleString()}});setFixA(null);}} full>Save Correction</Btn>
               <Btn onClick={()=>{if(window.confirm("Delete this record?"))dispatch({type:"DEL_ATT",id:fixA.id});setFixA(null);}} danger full>Delete</Btn>
             </div>
           </Dlg>}
@@ -831,21 +826,10 @@ function MgrDash({data,me,dispatch,ro}){
           </div>
           {fLeaves.length===0?<Empty icon="🏖" msg={`No ${lF.toLowerCase()} leaves`}/>:fLeaves.slice().reverse().map(l=>{
             const u=data.users.find(x=>x.id===l.userId);
-            return(
-              <Card key={l.id} style={{marginBottom:8}} left={lvColor(l.status)}>
-                <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}>
-                  <Av name={u?.avatar||"?"} color={C.green} size={32}/>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:600,color:C.text,fontSize:13}}>{u?.name}</div>
-                    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:4}}><Bdg label={l.type} color={C.blue}/><Bdg label={`${l.days}d`} color={C.muted}/><Bdg label={l.status} color={lvColor(l.status)}/></div>
-                    <div style={{fontSize:13,fontWeight:600,color:C.text,marginTop:6}}>{l.from} → {l.to}</div>
-                    <div style={{fontSize:11,color:C.sub,marginTop:2}}>"{l.reason}"</div>
-                    {l.reviewedBy&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>by {l.reviewedBy}</div>}
-                  </div>
-                </div>
-                {!ro&&l.status==="Pending"&&<div style={{display:"flex",gap:8}}><Btn onClick={()=>doRevLeave(l.id,"Approved")} color={C.green} sm full>✅ Approve</Btn><Btn onClick={()=>doRevLeave(l.id,"Rejected")} danger sm full>❌ Reject</Btn></div>}
-              </Card>
-            );
+            return(<Card key={l.id} style={{marginBottom:8}} left={lvColor(l.status)}>
+              <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}><Av name={u?.avatar||"?"} color={C.green} size={32}/><div style={{flex:1}}><div style={{fontWeight:600,color:C.text,fontSize:13}}>{u?.name}</div><div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:4}}><Bdg label={l.type} color={C.blue}/><Bdg label={`${l.days}d`} color={C.muted}/><Bdg label={l.status} color={lvColor(l.status)}/></div><div style={{fontSize:13,fontWeight:600,color:C.text,marginTop:6}}>{l.from} → {l.to}</div><div style={{fontSize:11,color:C.sub,marginTop:2}}>"{l.reason}"</div>{l.reviewedBy&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>by {l.reviewedBy}</div>}</div></div>
+              {!ro&&l.status==="Pending"&&<div style={{display:"flex",gap:8}}><Btn onClick={()=>doRevLeave(l.id,"Approved")} color={C.green} sm full>✅ Approve</Btn><Btn onClick={()=>doRevLeave(l.id,"Rejected")} danger sm full>❌ Reject</Btn></div>}
+            </Card>);
           })}
         </div>
       )}
@@ -854,41 +838,37 @@ function MgrDash({data,me,dispatch,ro}){
         <div>
           {!ro&&<Card style={{marginBottom:14}}>
             <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Add Team Member</div>
-            <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Kiran Desai" max={SEC.NAME_MAX}/>
+            <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Kiran Desai" max={60}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee [EMP]"},{v:"TL",l:"Team Leader [TL]"},{v:"Manager",l:"Manager"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
             {uR==="EMP"&&<Inp label="Under [TL]" value={uTL} onChange={setUTL} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>}
-            <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 7777" type="password" max={SEC.PIN_MAX}/>
+            <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={8}/>
             <Btn onClick={doAddUser} full>Add Member</Btn>
           </Card>}
-          <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Team Leaders [{tls.length}]</div>
-          {tls.map(u=>(
-            <Card key={u.id} style={{marginBottom:8,padding:"10px 14px"}}>
-              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                <Av name={u.avatar} color={C.orange} size={36}/>
-                <div style={{flex:1}}><div style={{fontWeight:600,color:C.text,fontSize:13}}>{u.name} <Bdg label="TL" color={C.orange}/></div><div style={{fontSize:11,color:C.muted}}>{u.dept} · {data.users.filter(x=>x.tlId===u.id).map(x=>x.name).join(", ")||"No members"}</div></div>
-                {!ro&&<><button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>Edit</button><button onClick={()=>{if(window.confirm(`Remove ${u.name}?`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,marginLeft:4,fontFamily:"inherit"}}>Remove</button></>}
-              </div>
-            </Card>
-          ))}
-          <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",margin:"12px 0 8px"}}>Employees [{emps.length}]</div>
-          {emps.map(u=>{const tl=data.users.find(x=>x.id===u.tlId),tasks=data.tasks.filter(t=>t.assignedTo===u.id),at=data.attendance.find(a=>a.userId===u.id&&a.date===today());return(
-            <Card key={u.id} style={{marginBottom:8,padding:"10px 14px"}}>
-              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                <Av name={u.avatar} color={C.green} size={36}/>
-                <div style={{flex:1}}><div style={{fontWeight:600,color:C.text,fontSize:13}}>{u.name} <Bdg label="EMP" color={C.green}/></div><div style={{fontSize:11,color:C.muted}}>{u.dept} · {tl?`Under ${tl.name}`:"⚠ No TL"}</div><div style={{fontSize:11,color:at?C.green:C.muted}}>{at?`🟢 ${at.wfh?"WFH":"Office"} · ${at.loginTime}`:"⚪ Absent"}</div><div style={{fontSize:10,color:C.muted}}>{tasks.filter(t=>t.status==="Done").length}/{tasks.length} tasks done</div></div>
-                {!ro&&<><button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>Edit</button><button onClick={()=>{if(window.confirm(`Remove ${u.name}?`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,marginLeft:4,fontFamily:"inherit"}}>Remove</button></>}
-              </div>
-            </Card>
-          );})}
+          {["TL","EMP"].map(role=>{
+            const group=role==="TL"?tls:emps;
+            return(<div key={role} style={{marginBottom:16}}>
+              <div style={{fontSize:11,color:roleColor(role),fontWeight:700,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6,paddingLeft:8,borderLeft:`3px solid ${roleColor(role)}`}}>[{role}] — {group.length}</div>
+              {group.map(u=>{const tl=data.users.find(x=>x.id===u.tlId),tasks=data.tasks.filter(t=>t.assignedTo===u.id),at=data.attendance.find(a=>a.userId===u.id&&a.date===today());return(
+                <Card key={u.id} style={{marginBottom:6,padding:"10px 14px"}}>
+                  <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                    <Av name={u.avatar} color={roleColor(u.role)} size={34}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:600,color:C.text,fontSize:13}}>{u.name}</div>
+                      <div style={{fontSize:10,color:C.muted,marginTop:1}}>{u.dept}{tl?` · Under ${tl.name}`:""}{at?` · 🟢 ${at.wfh?"WFH":"Office"}`:" · ⚪ Absent"}</div>
+                      {role==="EMP"&&<div style={{fontSize:10,color:C.muted}}>{tasks.filter(t=>t.status==="Done").length}/{tasks.length} tasks done</div>}
+                    </div>
+                    {!ro&&<><button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit"}}>Edit</button><button onClick={()=>{if(window.confirm(`Remove ${u.name}?`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>✕</button></>}
+                  </div>
+                </Card>
+              );})}
+            </div>);
+          })}
           {editU&&!ro&&<Dlg title={`Edit — ${editU.name}`} onClose={()=>setEditU(null)}>
-            <Inp label="Name" value={editU.name} onChange={v=>setEditU(p=>({...p,name:v}))} max={SEC.NAME_MAX}/>
+            <Inp label="Name" value={editU.name} onChange={v=>setEditU(p=>({...p,name:v}))} max={60}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={editU.role} onChange={v=>setEditU(p=>({...p,role:v}))} opts={[{v:"EMP",l:"EMP"},{v:"TL",l:"TL"},{v:"Manager",l:"Manager"}]}/><Inp label="Dept" value={editU.dept} onChange={v=>setEditU(p=>({...p,dept:v}))} opts={DEPTS}/></div>
             {editU.role==="EMP"&&<Inp label="Under TL" value={editU.tlId||""} onChange={v=>setEditU(p=>({...p,tlId:v?Number(v):undefined}))} opts={[{v:"",l:"— None —"},...tls.filter(t=>t.id!==editU.id).map(t=>({v:t.id,l:t.name}))]}/>}
-            <Inp label="PIN" value={editU.pin||""} onChange={v=>setEditU(p=>({...p,pin:v}))} type="password" max={SEC.PIN_MAX}/>
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={()=>{const name=SEC.sanitize(editU.name,60);if(!name||!editU.pin||!SEC.validPin(editU.pin)){alert("Check name and PIN");return;}dispatch({type:"UPD_USER",id:editU.id,ch:{name,role:editU.role,dept:editU.dept,pin:editU.pin,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),tlId:editU.role==="EMP"?editU.tlId:undefined}});setEditU(null);}} full>Save</Btn>
-              <Btn onClick={()=>setEditU(null)} ghost full>Cancel</Btn>
-            </div>
+            <Inp label="PIN" value={editU.pin||""} onChange={v=>setEditU(p=>({...p,pin:v}))} type="password" max={8}/>
+            <div style={{display:"flex",gap:8}}><Btn onClick={()=>{const name=SEC.sanitize(editU.name,60);if(!name||!editU.pin||!SEC.validPin(editU.pin)){alert("Check name and PIN");return;}dispatch({type:"UPD_USER",id:editU.id,ch:{name,role:editU.role,dept:editU.dept,pin:editU.pin,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),tlId:editU.role==="EMP"?editU.tlId:undefined}});setEditU(null);}} full>Save</Btn><Btn onClick={()=>setEditU(null)} ghost full>Cancel</Btn></div>
           </Dlg>}
         </div>
       )}
@@ -897,148 +877,78 @@ function MgrDash({data,me,dispatch,ro}){
 
       {tab==="announce"&&(
         <div>
-          {!ro&&<Card style={{marginBottom:14}}><div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:12}}>Send Announcement to Everyone</div><Inp label="Message" value={ann} onChange={setAnn} placeholder="Your announcement..." rows={3} max={SEC.MSG_MAX}/><Btn onClick={doAnn} full>Send to All</Btn></Card>}
+          {!ro&&<Card style={{marginBottom:14}}><div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:12}}>Send Announcement to Everyone</div><Inp label="Message" value={ann} onChange={setAnn} placeholder="Your announcement..." rows={3} max={400}/><Btn onClick={doAnn} full>Send to All</Btn></Card>}
           <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Past Announcements</div>
-          {data.announcements.slice().reverse().map(a=>(
-            <Card key={a.id} style={{marginBottom:8,padding:"12px 14px"}} left={C.accent}>
-              <div style={{fontSize:13,color:C.text,lineHeight:1.5}}>{a.msg}</div>
-              <div style={{fontSize:10,color:C.muted,marginTop:4}}>{a.from} · {a.ts}</div>
-            </Card>
-          ))}
+          {data.announcements.slice().reverse().map(a=><Card key={a.id} style={{marginBottom:8,padding:"12px 14px"}} left={C.accent}><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>{a.msg}</div><div style={{fontSize:10,color:C.muted,marginTop:4}}>{a.from} · {a.ts}</div></Card>)}
         </div>
       )}
 
       {tab==="message"&&isGuest&&(
         <div>
-          <Card style={{marginBottom:12}}>
-            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:12}}>Message the Manager</div>
-            <Inp label="Your message" value={gMsg} onChange={setGMsg} placeholder="Type your message..." rows={3} max={SEC.MSG_MAX}/>
-            <Btn onClick={doGuestMsg} full disabled={!gMsg.trim()}>Send Message</Btn>
-          </Card>
-          {(data.messages||[]).filter(m=>m.fromId==="guest").slice().reverse().map(m=>(
-            <Card key={m.id} style={{marginBottom:6,padding:"10px 14px"}}>
-              <div style={{fontSize:12,color:C.text}}>{m.msg}</div>
-              <div style={{fontSize:10,color:C.muted,marginTop:2}}>{m.ts}</div>
-            </Card>
-          ))}
+          <Card style={{marginBottom:12}}><div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:12}}>Message the Manager</div><Inp label="Your message" value={gMsg} onChange={setGMsg} placeholder="Type your message..." rows={3} max={400}/><Btn onClick={doGuestMsg} full disabled={!gMsg.trim()}>Send Message</Btn></Card>
+          {(data.messages||[]).filter(m=>m.fromId==="guest").slice().reverse().map(m=><Card key={m.id} style={{marginBottom:6,padding:"10px 14px"}}><div style={{fontSize:12,color:C.text}}>{m.msg}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{m.ts}</div></Card>)}
         </div>
       )}
 
       {tab==="inbox"&&!ro&&(
         <div>
-          {guestMsgs.length===0?<Empty icon="💬" msg="No messages"/>:guestMsgs.slice().reverse().map(m=>(
-            <Card key={m.id} style={{marginBottom:8}} left={m.read?undefined:C.accent}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{fontSize:12,fontWeight:600,color:C.text}}>{m.fromName}</div><div style={{fontSize:10,color:C.muted}}>{m.ts}</div></div>
-              <div style={{fontSize:13,color:C.sub,lineHeight:1.5}}>{m.msg}</div>
-              {!m.read&&<button onClick={()=>dispatch({type:"READ_MSG",id:m.id})} style={{marginTop:6,background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Mark read</button>}
-            </Card>
-          ))}
+          {guestMsgs.length===0?<Empty icon="💬" msg="No messages from guests"/>:guestMsgs.slice().reverse().map(m=><Card key={m.id} style={{marginBottom:8}} left={m.read?undefined:C.accent}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{fontSize:12,fontWeight:600,color:C.text}}>{m.fromName}</div><div style={{fontSize:10,color:C.muted}}>{m.ts}</div></div><div style={{fontSize:13,color:C.sub,lineHeight:1.5}}>{m.msg}</div>{!m.read&&<button onClick={()=>dispatch({type:"READ_MSG",id:m.id})} style={{marginTop:6,background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Mark read</button>}</Card>)}
         </div>
       )}
 
-      {tab==="adminpanel"&&me.role==="Admin"&&(
+      {tab==="adminpanel"&&isAdmin&&(
         <div>
-          {/* Add Manager */}
           <Card style={{marginBottom:14}}>
-            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>➕ Add Manager</div>
-            <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Rahul Sharma" max={SEC.NAME_MAX}/>
-            <Inp label="Department" value={uD} onChange={setUD} opts={[...DEPTS,"All"]}/>
-            <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={SEC.PIN_MAX}/>
-            <Btn onClick={()=>{
-              const name=SEC.sanitize(uN,SEC.NAME_MAX);
-              if(!name||!uP){alert("Name and PIN required");return;}
-              if(!SEC.validPin(uP)){alert("PIN must be 4–8 digits");return;}
-              if(data.users.some(u=>u.pin===uP)){alert("PIN already taken");return;}
-              dispatch({type:"ADD_USER",p:{id:newId(),name,role:"Manager",dept:uD,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),pin:uP}});
-              setUN("");setUP("");
-            }} full>Add Manager</Btn>
+            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>➕ Add Any Member</div>
+            <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Rahul Sharma" max={60}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee [EMP]"},{v:"TL",l:"Team Leader [TL]"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
+            {uR==="EMP"&&<Inp label="Under [TL]" value={uTL} onChange={setUTL} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>}
+            <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={8}/>
+            <Btn onClick={doAddUser} full>Add Member</Btn>
           </Card>
-
-          {/* Managers List */}
-          <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Managers [{mgrs.length}]</div>
-          {mgrs.map(u=>(
-            <Card key={u.id} style={{marginBottom:8,padding:"10px 14px"}}>
-              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                <Av name={u.avatar} color={C.accent} size={36}/>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,color:C.text,fontSize:13}}>{u.name} <Bdg label="Manager" color={C.accent}/></div>
-                  <div style={{fontSize:11,color:C.muted}}>{u.dept}</div>
-                </div>
-                <button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>Edit</button>
-                <button onClick={()=>{if(window.confirm(`Remove manager ${u.name}? This cannot be undone.`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,marginLeft:4,fontFamily:"inherit"}}>Remove</button>
-              </div>
-            </Card>
-          ))}
-          {mgrs.length===0&&<Empty icon="👤" msg="No managers yet"/>}
-
-          {/* All Users overview */}
-          <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",margin:"16px 0 8px"}}>All Users [{data.users.length}]</div>
-          {data.users.map(u=>(
-            <Card key={u.id} style={{marginBottom:6,padding:"10px 14px"}}>
-              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                <Av name={u.avatar} color={roleColor(u.role)} size={30}/>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,color:C.text,fontSize:12}}>{u.name}</div>
-                  <div style={{fontSize:10,color:C.muted}}>{u.dept}</div>
-                </div>
-                <Bdg label={u.role} color={roleColor(u.role)}/>
-                {u.id!==me.id&&(
-                  <button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>Edit</button>
-                )}
-              </div>
-            </Card>
-          ))}
-
-          {/* Edit user modal reused */}
+          <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:10}}>All Users — {data.users.length} total</div>
+          {["Admin","Manager","TL","EMP"].map(role=>{
+            const group=data.users.filter(u=>u.role===role);
+            if(!group.length)return null;
+            return(<div key={role} style={{marginBottom:14}}>
+              <div style={{fontSize:11,color:roleColor(role),fontWeight:700,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6,paddingLeft:8,borderLeft:`3px solid ${roleColor(role)}`}}>[{role}] — {group.length}</div>
+              {group.map(u=>{const tl=data.users.find(x=>x.id===u.tlId),at=data.attendance.find(a=>a.userId===u.id&&a.date===today());return(
+                <Card key={u.id} style={{marginBottom:6,padding:"10px 14px"}}>
+                  <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                    <Av name={u.avatar} color={roleColor(u.role)} size={32}/>
+                    <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,color:C.text,fontSize:12}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.dept}{tl?` · Under ${tl.name}`:""}{at?` · 🟢`:" · ⚪"}</div></div>
+                    <Bdg label={u.role} color={roleColor(u.role)}/>
+                    {u.id!==me.id&&<><button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>Edit</button><button onClick={()=>{if(window.confirm(`Remove ${u.name}?`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>✕</button></>}
+                  </div>
+                </Card>
+              );})}
+            </div>);
+          })}
           {editU&&<Dlg title={`Edit — ${editU.name}`} onClose={()=>setEditU(null)}>
-            <Inp label="Name" value={editU.name} onChange={v=>setEditU(p=>({...p,name:v}))} max={SEC.NAME_MAX}/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <Inp label="Role" value={editU.role} onChange={v=>setEditU(p=>({...p,role:v}))} opts={[{v:"EMP",l:"EMP"},{v:"TL",l:"TL"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/>
-              <Inp label="Dept" value={editU.dept} onChange={v=>setEditU(p=>({...p,dept:v}))} opts={[...DEPTS,"All"]}/>
-            </div>
-            {editU.role==="EMP"&&<Inp label="Under TL" value={editU.tlId||""} onChange={v=>setEditU(p=>({...p,tlId:v?Number(v):undefined}))} opts={[{v:"",l:"— None —"},...tls.map(t=>({v:t.id,l:t.name}))]}/>}
-            <Inp label="PIN" value={editU.pin||""} onChange={v=>setEditU(p=>({...p,pin:v}))} type="password" max={SEC.PIN_MAX}/>
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={()=>{
-                const name=SEC.sanitize(editU.name,60);
-                if(!name||!editU.pin||!SEC.validPin(editU.pin)){alert("Check name and PIN");return;}
-                dispatch({type:"UPD_USER",id:editU.id,ch:{name,role:editU.role,dept:editU.dept,pin:editU.pin,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),tlId:editU.role==="EMP"?editU.tlId:undefined}});
-                setEditU(null);
-              }} full>Save</Btn>
-              <Btn onClick={()=>setEditU(null)} ghost full>Cancel</Btn>
-            </div>
+            <Inp label="Name" value={editU.name} onChange={v=>setEditU(p=>({...p,name:v}))} max={60}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={editU.role} onChange={v=>setEditU(p=>({...p,role:v}))} opts={[{v:"EMP",l:"EMP"},{v:"TL",l:"TL"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/><Inp label="Dept" value={editU.dept} onChange={v=>setEditU(p=>({...p,dept:v}))} opts={DEPTS}/></div>
+            {editU.role==="EMP"&&<Inp label="Under TL" value={editU.tlId||""} onChange={v=>setEditU(p=>({...p,tlId:v?Number(v):undefined}))} opts={[{v:"",l:"— None —"},...tls.filter(t=>t.id!==editU.id).map(t=>({v:t.id,l:t.name}))]}/>}
+            <Inp label="PIN" value={editU.pin||""} onChange={v=>setEditU(p=>({...p,pin:v}))} type="password" max={8}/>
+            <div style={{display:"flex",gap:8}}><Btn onClick={()=>{const name=SEC.sanitize(editU.name,60);if(!name||!editU.pin||!SEC.validPin(editU.pin)){alert("Check name and PIN");return;}dispatch({type:"UPD_USER",id:editU.id,ch:{name,role:editU.role,dept:editU.dept,pin:editU.pin,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),tlId:editU.role==="EMP"?editU.tlId:undefined}});setEditU(null);}} full>Save</Btn><Btn onClick={()=>setEditU(null)} ghost full>Cancel</Btn></div>
           </Dlg>}
         </div>
       )}
+
+      {tab==="account"&&!ro&&(
         <div>
-          {/* Profile Card */}
           <Card style={{marginBottom:12}}>
-            <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}>
-              <Av name={me.avatar} color={roleColor(me.role)} size={48}/>
-              <div>
-                <div style={{fontWeight:700,color:C.text,fontSize:15}}>{me.name}</div>
-                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{me.dept} · <Bdg label={me.role} color={roleColor(me.role)}/></div>
-              </div>
-            </div>
+            <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}><Av name={me.avatar} color={roleColor(me.role)} size={48}/><div><div style={{fontWeight:700,color:C.text,fontSize:15}}>{me.name}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{me.dept} · <Bdg label={me.role} color={roleColor(me.role)}/></div></div></div>
             <div style={{height:1,background:C.border,margin:"0 0 14px"}}/>
             <div style={{fontWeight:600,fontSize:13,color:C.text,marginBottom:12}}>Edit My Details</div>
-            <Inp label="Full Name" value={myName} onChange={setMyName} placeholder="Your name" max={SEC.NAME_MAX}/>
-            <Inp label="Department" value={myDept} onChange={setMyDept} opts={[...DEPTS,"All","Other"]}/>
-            <Btn onClick={()=>{
-              const name=SEC.sanitize(myName,SEC.NAME_MAX);
-              if(!name.trim()){alert("Name cannot be empty");return;}
-              dispatch({type:"UPD_USER",id:me.id,ch:{name,dept:myDept,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)}});
-              me.name=name; me.dept=myDept; me.avatar=name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
-              alert("Profile updated!");
-            }} full>Save Profile</Btn>
+            <Inp label="Full Name" value={myName} onChange={setMyName} placeholder="Your name" max={60}/>
+            <Inp label="Department" value={myDept} onChange={setMyDept} opts={DEPTS}/>
+            <Btn onClick={()=>{const name=SEC.sanitize(myName,60);if(!name.trim()){alert("Name cannot be empty");return;}dispatch({type:"UPD_USER",id:me.id,ch:{name,dept:myDept,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)}});me.name=name;me.dept=myDept;alert("Profile updated!");}} full>Save Profile</Btn>
           </Card>
-
-          {/* Change PIN Card */}
           <Card>
             <div style={{fontWeight:600,fontSize:13,color:C.text,marginBottom:12}}>Change PIN</div>
-            <Inp label="Current PIN" value={cp.old} onChange={v=>setCp(p=>({...p,old:v}))} type="password" max={SEC.PIN_MAX}/>
-            <Inp label="New PIN" value={cp.n1} onChange={v=>setCp(p=>({...p,n1:v}))} type="password" max={SEC.PIN_MAX}/>
-            <Inp label="Confirm New PIN" value={cp.n2} onChange={v=>setCp(p=>({...p,n2:v}))} type="password" max={SEC.PIN_MAX}/>
+            <Inp label="Current PIN" value={cp.old} onChange={v=>setCp(p=>({...p,old:v}))} type="password" max={8}/>
+            <Inp label="New PIN" value={cp.n1} onChange={v=>setCp(p=>({...p,n1:v}))} type="password" max={8}/>
+            <Inp label="Confirm New PIN" value={cp.n2} onChange={v=>setCp(p=>({...p,n2:v}))} type="password" max={8}/>
             <Btn onClick={doChangePin} full>Update PIN</Btn>
           </Card>
         </div>
@@ -1047,6 +957,7 @@ function MgrDash({data,me,dispatch,ro}){
   );
 }
 
+// ── APP ROOT ──────────────────────────────────────────────────────────────────
 function App(){
   const[data,setData]=useState(()=>loadData());
   const[me,setMe]=useState(null);
@@ -1060,34 +971,35 @@ function App(){
     return()=>clearInterval(iv);
   },[me]);
 
-  if(!me){
-    return <Login users={data.users} onLogin={login}/>;
-  }
-  if(me.role!=="Guest"&&!validSession(me.id)){
-    destroySession();
-    return <Login users={data.users} onLogin={login}/>;
-  }
+  if(!me){return <Login users={data.users} onLogin={login}/>;}
+  if(me.role!=="Guest"&&!validSession(me.id)){destroySession();return <Login users={data.users} onLogin={login}/>;}
 
   const ro=me.role==="Guest";
 
   return(
     <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif",color:C.text}}>
-      <div style={{background:"linear-gradient(90deg,#0F172A 0%,#1E3A5F 100%)",padding:"0 24px",display:"flex",alignItems:"center",gap:14,height:56,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>
+      {/* NAV */}
+      <div style={{background:"linear-gradient(90deg,#0F172A 0%,#1E3A5F 100%)",padding:"0 20px",display:"flex",alignItems:"center",gap:12,height:54,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,boxShadow:"0 4px 12px rgba(79,70,229,0.4)"}}>🏢</div>
-          <span style={{fontWeight:800,fontSize:16,color:"#fff",letterSpacing:"-.3px"}}>WooHoo Media</span>
+          <div style={{width:30,height:30,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,boxShadow:"0 4px 12px rgba(79,70,229,0.4)"}}>🎯</div>
+          <div>
+            <div style={{fontWeight:800,fontSize:14,color:"#fff",letterSpacing:"-.3px",lineHeight:1}}>WooHoo Media</div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,.35)",letterSpacing:".5px"}}>Manipulating Internet</div>
+          </div>
         </div>
         <div style={{flex:1}}/>
         {ro&&<span style={{background:"rgba(234,88,12,.2)",color:"#FDBA74",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1px solid rgba(234,88,12,.3)"}}>Guest</span>}
         {me.role==="Admin"&&<span style={{background:"rgba(124,58,237,.2)",color:"#C4B5FD",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1px solid rgba(124,58,237,.3)"}}>Admin</span>}
         <Bell notifs={data.notifications} uid={me.id} onRead={id=>dispatch({type:"READ_NOTIF",id})}/>
-        <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"5px 10px",border:"1px solid rgba(255,255,255,0.1)"}}>
-          <div style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#4F46E5,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:"#fff"}}>{me.avatar}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"4px 10px",border:"1px solid rgba(255,255,255,0.1)"}}>
+          <div style={{width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#4F46E5,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>{me.avatar}</div>
           <span style={{fontSize:12,color:"rgba(255,255,255,.8)",fontWeight:500}}>{me.name}</span>
         </div>
-        <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"6px 12px",color:"rgba(255,255,255,.6)",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Sign out</button>
+        <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"5px 11px",color:"rgba(255,255,255,.6)",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Sign out</button>
       </div>
-      <div style={{background:"linear-gradient(135deg,#1E3A5F 0%,#312E81 100%)",padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+
+      {/* HERO */}
+      <div style={{background:"linear-gradient(135deg,#1E3A5F 0%,#312E81 100%)",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontWeight:800,fontSize:17,color:"#fff"}}>{me.name}</div>
           <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginTop:3,display:"flex",alignItems:"center",gap:6}}>
@@ -1102,7 +1014,9 @@ function App(){
           </div>
         )}
       </div>
-      <div style={{maxWidth:720,margin:"0 auto",padding:"20px 16px 60px"}}>
+
+      {/* CONTENT */}
+      <div style={{maxWidth:720,margin:"0 auto",padding:"18px 14px 60px"}}>
         {me.role==="EMP"&&<EmpDash data={data} me={me} dispatch={dispatch}/>}
         {me.role==="TL"&&<TLDash data={data} me={me} dispatch={dispatch}/>}
         {(me.role==="Manager"||me.role==="Admin"||me.role==="Guest")&&<MgrDash data={data} me={me} dispatch={dispatch} ro={ro}/>}
@@ -1110,13 +1024,11 @@ function App(){
     </div>
   );
 }
-
-  </script>
-  <script>
-    window.addEventListener('load', function() {
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(App));
-    });
-  </script>
+</script>
+<script>
+  window.addEventListener('load',function(){
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+  });
+</script>
 </body>
 </html>
