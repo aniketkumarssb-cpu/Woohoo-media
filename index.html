@@ -6,13 +6,12 @@
   <meta name="theme-color" content="#0F172A"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="Woohoo media"/>
-  <title>Woohoo media</title>
+  <meta name="apple-mobile-web-app-title" content="MY Office"/>
+  <title>WooHoo Media</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif}#root{min-height:100vh}</style>
-<link rel="apple-touch-icon" href="icon.png" />
 </head>
 <body>
   <div id="root"></div>
@@ -76,13 +75,47 @@ const SEED={
     {id:2002,userId:6,from:"2026-06-18",to:"2026-06-18",days:1,reason:"Medical",type:"Sick",status:"Approved",appliedAt:"2026-06-11",reviewedBy:"Priya Mehta"},
   ],
   igPages:[
-    {id:"ig1",handle:"brandwave.in",name:"BrandWave India",category:"Marketing",avatar:"BW",updatedAt:"2026-06-13"},
-    {id:"ig2",handle:"reelcreators_hq",name:"Reel Creators HQ",category:"Content",avatar:"RC",updatedAt:"2026-06-13"},
+    {id:"ig1",handle:"rajasthan",name:"Rajasthan",category:"Regional",avatar:"RJ",updatedAt:"2026-06-13"},
+    {id:"ig2",handle:"maharashtra",name:"Maharashtra",category:"Regional",avatar:"MH",updatedAt:"2026-06-13"},
+    {id:"ig3",handle:"bombay",name:"Bombay",category:"Regional",avatar:"BM",updatedAt:"2026-06-13"},
+    {id:"ig4",handle:"kolkata",name:"Kolkata",category:"Regional",avatar:"KL",updatedAt:"2026-06-13"},
+    {id:"ig5",handle:"westbengal",name:"West Bengal",category:"Regional",avatar:"WB",updatedAt:"2026-06-13"},
+    {id:"ig6",handle:"sarcasm",name:"Sarcasm",category:"Humor",avatar:"SC",updatedAt:"2026-06-13"},
+    {id:"ig7",handle:"moodofgirls",name:"Mood of Girls",category:"Lifestyle",avatar:"MG",updatedAt:"2026-06-13"},
+    {id:"ig8",handle:"brands",name:"Brands",category:"Marketing",avatar:"BR",updatedAt:"2026-06-13"},
+    {id:"ig9",handle:"ultraluxury",name:"Ultra Luxury",category:"Luxury",avatar:"UL",updatedAt:"2026-06-13"},
+    {id:"ig10",handle:"jewellery",name:"Jewellery",category:"Fashion",avatar:"JW",updatedAt:"2026-06-13"},
+    {id:"ig11",handle:"mewar",name:"Mewar",category:"Regional",avatar:"MW",updatedAt:"2026-06-13"},
+    {id:"ig12",handle:"uttarpradesh",name:"Uttar Pradesh",category:"Regional",avatar:"UP",updatedAt:"2026-06-13"},
+    {id:"ig13",handle:"ayodhya",name:"Ayodhya",category:"Regional",avatar:"AY",updatedAt:"2026-06-13"},
+    {id:"ig14",handle:"rasalkhaimah",name:"Ras Al Khaimah",category:"Travel",avatar:"RK",updatedAt:"2026-06-13"},
+    {id:"ig15",handle:"worldtour",name:"World Tour",category:"Travel",avatar:"WT",updatedAt:"2026-06-13"},
+    {id:"ig16",handle:"sharemarket",name:"Share Market",category:"Finance",avatar:"SM",updatedAt:"2026-06-13"},
+    {id:"ig17",handle:"muzic",name:"Muzic",category:"Music",avatar:"MZ",updatedAt:"2026-06-13"},
+    {id:"ig18",handle:"rapindia",name:"Rap India",category:"Music",avatar:"RI",updatedAt:"2026-06-13"},
+    {id:"ig19",handle:"aifuture",name:"AI Future",category:"Tech",avatar:"AI",updatedAt:"2026-06-13"},
+    {id:"ig20",handle:"techindia",name:"Tech India",category:"Tech",avatar:"TI",updatedAt:"2026-06-13"},
+    {id:"ig21",handle:"tamilnadu",name:"Tamil Nadu",category:"Regional",avatar:"TN",updatedAt:"2026-06-13"},
+    {id:"ig22",handle:"paparazzi",name:"Paparazzi",category:"Entertainment",avatar:"PZ",updatedAt:"2026-06-13"},
   ],
   messages:[],
 };
 
-const STORE="myoffice_v9";
+// ── Google Sheets Sync ────────────────────────────────────────────────────────
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbzNqmrVBih1pWDWC-Ei2I95TvWeUoxYCA2Am60oz3dGF1UiDilxJrDlFIH28hdoihFF/exec";
+
+const syncToSheet = async (type, payload) => {
+  try {
+    await fetch(SHEET_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, ...payload }),
+    });
+  } catch (e) {
+    console.warn("Sheet sync failed:", e);
+  }
+};
 const loadData=()=>{try{const d=localStorage.getItem(STORE);return d?JSON.parse(d):SEED;}catch{return SEED;}};
 const saveData=d=>{try{localStorage.setItem(STORE,JSON.stringify(d));}catch{}};
 
@@ -224,8 +257,8 @@ function Login({users,onLogin}){
       <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderRadius:20,padding:36,width:"100%",maxWidth:400,border:"1px solid rgba(255,255,255,0.12)",boxShadow:"0 32px 64px rgba(0,0,0,0.4)"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{width:60,height:60,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(79,70,229,0.4)"}}>🏢</div>
-          <div style={{fontWeight:800,fontSize:24,color:"#fff",letterSpacing:"-.5px"}}>Woohoo media</div>
-          <div style={{fontSize:13,color:"rgba(255,255,255,.45)",marginTop:4}}>Your team workspace</div>
+          <div style={{fontWeight:800,fontSize:24,color:"#fff",letterSpacing:"-.5px"}}>WooHoo Media</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,.45)",marginTop:4}}>Manipulating Internet</div>
         </div>
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>Account</div>
@@ -349,8 +382,21 @@ function AttBlock({data,me,dispatch,ro}){
   const[wfh,setWfh]=useState(false);
   const rec=data.attendance.find(a=>a.userId===me.id&&a.date===today());
   const punch=()=>{
-    if(!rec)dispatch({type:"PUNCH_IN",p:{id:newId(),userId:me.id,date:today(),loginTime:nowTime(),logoutTime:"",hoursWorked:"",wfh}});
-    else if(!rec.logoutTime)dispatch({type:"PUNCH_OUT",id:rec.id,out:nowTime(),hw:calcHours(rec.loginTime,nowTime())});
+    const tl=data.users.find(u=>u.id===me.tlId);
+    if(!rec){
+      dispatch({type:"PUNCH_IN",p:{id:newId(),userId:me.id,date:today(),loginTime:nowTime(),logoutTime:"",hoursWorked:"",wfh}});
+      syncToSheet("ATTENDANCE",{
+        date:today(), employeeName:me.name, teamLeader:tl?.name||"",
+        loginTime:nowTime(), logoutTime:"", hoursWorked:"", wfh,
+      });
+    } else if(!rec.logoutTime){
+      const hw=calcHours(rec.loginTime,nowTime());
+      dispatch({type:"PUNCH_OUT",id:rec.id,out:nowTime(),hw});
+      syncToSheet("ATTENDANCE",{
+        date:today(), employeeName:me.name, teamLeader:tl?.name||"",
+        loginTime:rec.loginTime, logoutTime:nowTime(), hoursWorked:hw, wfh:rec.wfh,
+      });
+    }
   };
   const hist=data.attendance.filter(a=>a.userId===me.id).slice().reverse().slice(0,10);
   return(
@@ -520,6 +566,16 @@ function EmpDash({data,me,dispatch}){
     dispatch({type:"ADD_SUB",p:{id:newId(),empId:me.id,type:sType,title,link,taskId:null,status:"Pending",submittedAt:new Date().toLocaleString(),note}});
     const tl=data.users.find(u=>u.id===me.tlId);
     if(tl)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:tl.id,fromName:me.name,msg:`📤 ${me.name} submitted: ${title}`,read:false,ts:new Date().toLocaleString()}});
+    // ── Sync to Google Sheet ──
+    syncToSheet("WORK_SUBMIT",{
+      date: today(),
+      teamLeader: tl?.name || "",
+      employeeName: me.name,
+      contentType: sType,
+      workCount: 1,
+      pageName: title,
+      remarks: link || note || "",
+    });
     setSTitle("");setSLink("");setSNote("");setTab("subs");
   };
   const pend=myT.filter(t=>t.status!=="Done").length;
@@ -614,6 +670,9 @@ function MgrDash({data,me,dispatch,ro}){
   const[editU,setEditU]=useState(null);
   const[cp,setCp]=useState({old:"",n1:"",n2:""});
   const[gMsg,setGMsg]=useState("");
+  const[myName,setMyName]=useState(me.name);
+  const[myDept,setMyDept]=useState(me.dept);
+  const mgrs=data.users.filter(u=>u.role==="Manager");
   const tls=data.users.filter(u=>u.role==="TL");
   const emps=data.users.filter(u=>u.role==="EMP");
   const nonMgr=data.users.filter(u=>u.role!=="Manager"&&u.role!=="Admin");
@@ -674,6 +733,7 @@ function MgrDash({data,me,dispatch,ro}){
     {k:"team",label:"Team"},{k:"ig",label:"Instagram"},{k:"announce",label:"Announce"},
     ...(isGuest?[{k:"message",label:"Message Manager"}]:[]),
     ...(!ro&&guestMsgs.length>0?[{k:"inbox",label:`Inbox${guestMsgs.filter(m=>!m.read).length>0?` (${guestMsgs.filter(m=>!m.read).length})`:""}`}]:[]),
+    ...(me.role==="Admin"?[{k:"adminpanel",label:"⚙ Admin Panel"}]:[]),
     ...(!ro?[{k:"account",label:"My Account"}]:[]),
   ];
 
@@ -876,19 +936,112 @@ function MgrDash({data,me,dispatch,ro}){
         </div>
       )}
 
-      {tab==="account"&&!ro&&(
-        <Card>
-          <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}>
-            <Av name={me.avatar} color={roleColor(me.role)} size={48}/>
-            <div><div style={{fontWeight:700,color:C.text,fontSize:15}}>{me.name}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{me.dept} · <Bdg label={me.role} color={roleColor(me.role)}/></div></div>
-          </div>
-          <div style={{height:1,background:C.border,margin:"0 0 14px"}}/>
-          <div style={{fontWeight:600,fontSize:13,color:C.text,marginBottom:12}}>Change PIN</div>
-          <Inp label="Current PIN" value={cp.old} onChange={v=>setCp(p=>({...p,old:v}))} type="password" max={SEC.PIN_MAX}/>
-          <Inp label="New PIN" value={cp.n1} onChange={v=>setCp(p=>({...p,n1:v}))} type="password" max={SEC.PIN_MAX}/>
-          <Inp label="Confirm New PIN" value={cp.n2} onChange={v=>setCp(p=>({...p,n2:v}))} type="password" max={SEC.PIN_MAX}/>
-          <Btn onClick={doChangePin} full>Update PIN</Btn>
-        </Card>
+      {tab==="adminpanel"&&me.role==="Admin"&&(
+        <div>
+          {/* Add Manager */}
+          <Card style={{marginBottom:14}}>
+            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>➕ Add Manager</div>
+            <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Rahul Sharma" max={SEC.NAME_MAX}/>
+            <Inp label="Department" value={uD} onChange={setUD} opts={[...DEPTS,"All"]}/>
+            <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={SEC.PIN_MAX}/>
+            <Btn onClick={()=>{
+              const name=SEC.sanitize(uN,SEC.NAME_MAX);
+              if(!name||!uP){alert("Name and PIN required");return;}
+              if(!SEC.validPin(uP)){alert("PIN must be 4–8 digits");return;}
+              if(data.users.some(u=>u.pin===uP)){alert("PIN already taken");return;}
+              dispatch({type:"ADD_USER",p:{id:newId(),name,role:"Manager",dept:uD,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),pin:uP}});
+              setUN("");setUP("");
+            }} full>Add Manager</Btn>
+          </Card>
+
+          {/* Managers List */}
+          <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Managers [{mgrs.length}]</div>
+          {mgrs.map(u=>(
+            <Card key={u.id} style={{marginBottom:8,padding:"10px 14px"}}>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                <Av name={u.avatar} color={C.accent} size={36}/>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:600,color:C.text,fontSize:13}}>{u.name} <Bdg label="Manager" color={C.accent}/></div>
+                  <div style={{fontSize:11,color:C.muted}}>{u.dept}</div>
+                </div>
+                <button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>Edit</button>
+                <button onClick={()=>{if(window.confirm(`Remove manager ${u.name}? This cannot be undone.`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"4px 8px",cursor:"pointer",fontSize:11,marginLeft:4,fontFamily:"inherit"}}>Remove</button>
+              </div>
+            </Card>
+          ))}
+          {mgrs.length===0&&<Empty icon="👤" msg="No managers yet"/>}
+
+          {/* All Users overview */}
+          <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",margin:"16px 0 8px"}}>All Users [{data.users.length}]</div>
+          {data.users.map(u=>(
+            <Card key={u.id} style={{marginBottom:6,padding:"10px 14px"}}>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                <Av name={u.avatar} color={roleColor(u.role)} size={30}/>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:600,color:C.text,fontSize:12}}>{u.name}</div>
+                  <div style={{fontSize:10,color:C.muted}}>{u.dept}</div>
+                </div>
+                <Bdg label={u.role} color={roleColor(u.role)}/>
+                {u.id!==me.id&&(
+                  <button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>Edit</button>
+                )}
+              </div>
+            </Card>
+          ))}
+
+          {/* Edit user modal reused */}
+          {editU&&<Dlg title={`Edit — ${editU.name}`} onClose={()=>setEditU(null)}>
+            <Inp label="Name" value={editU.name} onChange={v=>setEditU(p=>({...p,name:v}))} max={SEC.NAME_MAX}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <Inp label="Role" value={editU.role} onChange={v=>setEditU(p=>({...p,role:v}))} opts={[{v:"EMP",l:"EMP"},{v:"TL",l:"TL"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/>
+              <Inp label="Dept" value={editU.dept} onChange={v=>setEditU(p=>({...p,dept:v}))} opts={[...DEPTS,"All"]}/>
+            </div>
+            {editU.role==="EMP"&&<Inp label="Under TL" value={editU.tlId||""} onChange={v=>setEditU(p=>({...p,tlId:v?Number(v):undefined}))} opts={[{v:"",l:"— None —"},...tls.map(t=>({v:t.id,l:t.name}))]}/>}
+            <Inp label="PIN" value={editU.pin||""} onChange={v=>setEditU(p=>({...p,pin:v}))} type="password" max={SEC.PIN_MAX}/>
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={()=>{
+                const name=SEC.sanitize(editU.name,60);
+                if(!name||!editU.pin||!SEC.validPin(editU.pin)){alert("Check name and PIN");return;}
+                dispatch({type:"UPD_USER",id:editU.id,ch:{name,role:editU.role,dept:editU.dept,pin:editU.pin,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),tlId:editU.role==="EMP"?editU.tlId:undefined}});
+                setEditU(null);
+              }} full>Save</Btn>
+              <Btn onClick={()=>setEditU(null)} ghost full>Cancel</Btn>
+            </div>
+          </Dlg>}
+        </div>
+      )}
+        <div>
+          {/* Profile Card */}
+          <Card style={{marginBottom:12}}>
+            <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}>
+              <Av name={me.avatar} color={roleColor(me.role)} size={48}/>
+              <div>
+                <div style={{fontWeight:700,color:C.text,fontSize:15}}>{me.name}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{me.dept} · <Bdg label={me.role} color={roleColor(me.role)}/></div>
+              </div>
+            </div>
+            <div style={{height:1,background:C.border,margin:"0 0 14px"}}/>
+            <div style={{fontWeight:600,fontSize:13,color:C.text,marginBottom:12}}>Edit My Details</div>
+            <Inp label="Full Name" value={myName} onChange={setMyName} placeholder="Your name" max={SEC.NAME_MAX}/>
+            <Inp label="Department" value={myDept} onChange={setMyDept} opts={[...DEPTS,"All","Other"]}/>
+            <Btn onClick={()=>{
+              const name=SEC.sanitize(myName,SEC.NAME_MAX);
+              if(!name.trim()){alert("Name cannot be empty");return;}
+              dispatch({type:"UPD_USER",id:me.id,ch:{name,dept:myDept,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)}});
+              me.name=name; me.dept=myDept; me.avatar=name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
+              alert("Profile updated!");
+            }} full>Save Profile</Btn>
+          </Card>
+
+          {/* Change PIN Card */}
+          <Card>
+            <div style={{fontWeight:600,fontSize:13,color:C.text,marginBottom:12}}>Change PIN</div>
+            <Inp label="Current PIN" value={cp.old} onChange={v=>setCp(p=>({...p,old:v}))} type="password" max={SEC.PIN_MAX}/>
+            <Inp label="New PIN" value={cp.n1} onChange={v=>setCp(p=>({...p,n1:v}))} type="password" max={SEC.PIN_MAX}/>
+            <Inp label="Confirm New PIN" value={cp.n2} onChange={v=>setCp(p=>({...p,n2:v}))} type="password" max={SEC.PIN_MAX}/>
+            <Btn onClick={doChangePin} full>Update PIN</Btn>
+          </Card>
+        </div>
       )}
     </div>
   );
@@ -922,7 +1075,7 @@ function App(){
       <div style={{background:"linear-gradient(90deg,#0F172A 0%,#1E3A5F 100%)",padding:"0 24px",display:"flex",alignItems:"center",gap:14,height:56,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:32,height:32,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,boxShadow:"0 4px 12px rgba(79,70,229,0.4)"}}>🏢</div>
-          <span style={{fontWeight:800,fontSize:16,color:"#fff",letterSpacing:"-.3px"}}>Woohoo media</span>
+          <span style={{fontWeight:800,fontSize:16,color:"#fff",letterSpacing:"-.3px"}}>WooHoo Media</span>
         </div>
         <div style={{flex:1}}/>
         {ro&&<span style={{background:"rgba(234,88,12,.2)",color:"#FDBA74",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1px solid rgba(234,88,12,.3)"}}>Guest</span>}
