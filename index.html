@@ -175,7 +175,23 @@ const SEED={
 };
 
 const STORE="woohoo_v1";
-const loadData=()=>{try{const d=localStorage.getItem(STORE);return d?JSON.parse(d):SEED;}catch{return SEED;}};
+const loadData=()=>{
+  try{
+    const raw=localStorage.getItem(STORE);
+    if(!raw)return SEED;
+    const d=JSON.parse(raw);
+    // Always ensure SEED users exist — merge missing ones by id
+    const existingIds=new Set((d.users||[]).map(u=>u.id));
+    const missingUsers=SEED.users.filter(u=>!existingIds.has(u.id));
+    if(missingUsers.length>0){
+      d.users=[...(d.users||[]),...missingUsers];
+      localStorage.setItem(STORE,JSON.stringify(d));
+    }
+    // Ensure guestConfig exists
+    if(!d.guestConfig)d.guestConfig={viewAs:"Manager"};
+    return d;
+  }catch{return SEED;}
+};
 const saveData=d=>{try{localStorage.setItem(STORE,JSON.stringify(d));}catch{}};
 
 // ── REDUCER ───────────────────────────────────────────────────────────────────
@@ -357,11 +373,14 @@ function Login({users,onLogin}){
       return;
     }
     if(!SEC.validPin(pin)){setErr("PIN must be 4–8 digits");return;}
-    // Match by name (case-insensitive)
-    const u=users.find(u=>u.name.toLowerCase()===name);
-    if(!u){setErr("Username not found");return;}
-    const ok=u.pin.length===pin.length&&[...u.pin].every((c,i)=>c===pin[i]);
-    if(!ok){
+    // Match by name (case-insensitive) — try all users
+    const matches=users.filter(u=>u.name.toLowerCase()===name);
+    if(matches.length===0){setErr(`"${uname.trim()}" not found — check spelling`);return;}
+    // Try each match (same name can be TL + EMP)
+    const u=matches.find(u=>{
+      const ok=u.pin&&u.pin.length===pin.length&&[...u.pin].every((c,i)=>c===pin[i]);
+      return ok;
+    });
       const n=tries+1;setTries(n);
       if(n>=5){
         setLocked(true);
