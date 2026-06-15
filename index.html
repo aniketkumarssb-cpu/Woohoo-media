@@ -10,9 +10,11 @@
   <meta name="apple-mobile-web-app-title" content="WooHoo Media"/>
   <meta name="application-name" content="WooHoo Media"/>
   <meta name="description" content="WooHoo Media — Manipulating Internet"/>
-  <link rel="apple-touch-icon" sizes="180x180" href="icon.png"/>
+  <link rel="apple-touch-icon" sizes="512x512" href="icon.png"/>
   <link rel="icon" type="image/png" sizes="512x512" href="icon.png"/>
   <link rel="shortcut icon" href="icon.png"/>
+  <link rel="apple-touch-icon" href="icon.png" />
+  <link rel="icon" type="image/png" href="icon.png" />
   <title>WooHoo Media</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -61,10 +63,7 @@ const syncToSheet=async(type,payload)=>{
   }catch(e){console.warn("Sheet sync failed:",e);}
 };
 
-// ── GUEST VIEW CONFIG (Admin controls what Guest sees) ────────────────────────
-const DEFAULT_GUEST_CONFIG = { viewAs: "Manager" }; // Manager | TL | EMP
-
-
+// ── DATA ──────────────────────────────────────────────────────────────────────
 const CONTENT_TYPES_BY_DEPT={
   Content:["Carousel","Static"],
   Video:["Main Video","Top 5 News","Paparazzi Video"],
@@ -125,7 +124,6 @@ const SEED={
   attendance:[],
   leaves:[],
   messages:[],
-  guestConfig: { viewAs: "Manager" }, // Admin can change this
   igPages:[
     {id:"ig1", handle:"rajasthan",    name:"Rajasthan",      category:"Regional",    avatar:"RJ",updatedAt:"2026-06-14"},
     {id:"ig2", handle:"maharashtra",  name:"Maharashtra",    category:"Regional",    avatar:"MH",updatedAt:"2026-06-14"},
@@ -182,7 +180,6 @@ function reducer(s,a){
     case"UPD_IG":     n={...s,igPages:s.igPages.map(p=>p.id===a.id?{...p,...a.ch}:p)};break;
     case"ADD_MSG":    n={...s,messages:[...(s.messages||[]),a.p]};break;
     case"READ_MSG":   n={...s,messages:(s.messages||[]).map(m=>m.id===a.id?{...m,read:true}:m)};break;
-    case"SET_GUEST_CONFIG": n={...s,guestConfig:{...s.guestConfig,...a.ch}};break;
     default:return s;
   }
   saveData(n);return n;
@@ -317,40 +314,25 @@ function WorkSubmitForm({me,data,dispatch,isTL}){
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 function Login({users,onLogin}){
-  const[uname,setUname]=useState("");
-  const[pin,setPin]=useState("");
-  const[err,setErr]=useState("");
-  const[tries,setTries]=useState(0);
-  const[locked,setLocked]=useState(false);
+  const[sel,setSel]=useState("");const[pin,setPin]=useState("");const[err,setErr]=useState("");
+  const[tries,setTries]=useState(0);const[locked,setLocked]=useState(false);
   const ref=useRef(null);
   useEffect(()=>()=>clearTimeout(ref.current),[]);
-
   const go=()=>{
-    if(locked){setErr("Too many attempts. Wait 30s.");return;}
-    const name=uname.trim().toLowerCase();
-    if(!name){setErr("Enter your username");return;}
-    // Guest access
-    if(name==="guest"||name==="guest login"){
-      onLogin({id:"guest",name:"Guest",role:"Guest",avatar:"G",dept:"—",pin:""});
-      return;
-    }
+    if(locked){setErr("Locked. Wait 30s.");return;}
+    if(sel==="guest"){onLogin({id:"guest",name:"Guest",role:"Guest",avatar:"G",dept:"—",pin:""});return;}
     if(!SEC.validPin(pin)){setErr("PIN must be 4–8 digits");return;}
-    // Match by name (case-insensitive)
-    const u=users.find(u=>u.name.toLowerCase()===name);
-    if(!u){setErr("Username not found");return;}
+    const u=users.find(u=>u.id===Number(sel));
+    if(!u){setErr("Select a user");return;}
     const ok=u.pin.length===pin.length&&[...u.pin].every((c,i)=>c===pin[i]);
     if(!ok){
       const n=tries+1;setTries(n);
-      if(n>=5){
-        setLocked(true);
-        setErr("5 failed attempts. Locked 30s.");
-        ref.current=setTimeout(()=>{setLocked(false);setTries(0);setErr("");},30000);
-      } else setErr(`Wrong PIN — ${5-n} attempt(s) left`);
+      if(n>=5){setLocked(true);setErr("5 failed attempts. Locked 30s.");ref.current=setTimeout(()=>{setLocked(false);setTries(0);setErr("");},30000);}
+      else setErr(`Wrong PIN — ${5-n} left`);
       return;
     }
     createSession(u.id);setTries(0);onLogin(u);
   };
-
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 40%,#312E81 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"-apple-system,BlinkMacSystemFont,'Inter',sans-serif"}}>
       <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderRadius:20,padding:36,width:"100%",maxWidth:400,border:"1px solid rgba(255,255,255,0.12)",boxShadow:"0 32px 64px rgba(0,0,0,0.4)"}}>
@@ -359,42 +341,28 @@ function Login({users,onLogin}){
           <div style={{fontWeight:900,fontSize:26,color:"#fff",letterSpacing:"-.5px"}}>WooHoo Media</div>
           <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginTop:5,letterSpacing:".5px"}}>Manipulating Internet</div>
         </div>
-
-        {/* Username */}
         <div style={{marginBottom:14}}>
-          <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>Username</div>
-          <input
-            value={uname}
-            onChange={e=>{setUname(e.target.value);setErr("");}}
-            onKeyDown={e=>e.key==="Enter"&&go()}
-            placeholder="Enter your name"
-            autoComplete="off"
-            style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>Account</div>
+          <select value={sel} onChange={e=>{setSel(e.target.value);setErr("");setPin("");}} style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"11px 12px",color:sel?"#fff":"rgba(255,255,255,.4)",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",appearance:"none",cursor:"pointer"}}>
+            <option value="" style={{background:"#1E3A5F",color:"#fff"}}>— Choose account —</option>
+            {users.map(u=><option key={u.id} value={u.id} style={{background:"#1E3A5F",color:"#fff"}}>{u.name} [{u.role}]</option>)}
+            <option value="guest" style={{background:"#1E3A5F",color:"#fff"}}>👁 Guest (View Only)</option>
+          </select>
         </div>
-
-        {/* PIN */}
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>PIN</div>
-          <input
-            value={pin}
-            type="password"
-            maxLength={SEC.PIN_MAX}
-            autoComplete="off"
-            placeholder="••••••"
-            onChange={e=>{if(e.target.value.length<=SEC.PIN_MAX){setPin(e.target.value);setErr("");}}}
-            onKeyDown={e=>e.key==="Enter"&&go()}
-            style={{width:"100%",background:"rgba(255,255,255,0.08)",border:`1px solid ${locked?"rgba(225,29,72,.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:16,outline:"none",boxSizing:"border-box",fontFamily:"inherit",letterSpacing:"4px"}}/>
-        </div>
-
+        {sel&&sel!=="guest"&&(
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>PIN</div>
+            <input value={pin} type="password" maxLength={SEC.PIN_MAX} autoComplete="off" placeholder="••••••"
+              onChange={e=>{if(e.target.value.length<=SEC.PIN_MAX){setPin(e.target.value);setErr("");}}}
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              style={{width:"100%",background:"rgba(255,255,255,0.08)",border:`1px solid ${locked?"rgba(225,29,72,.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:16,outline:"none",boxSizing:"border-box",fontFamily:"inherit",letterSpacing:"4px"}}/>
+          </div>
+        )}
+        {sel==="guest"&&<div style={{background:"rgba(79,70,229,0.15)",border:"1px solid rgba(79,70,229,0.3)",borderRadius:10,padding:"10px 14px",fontSize:12,color:"rgba(165,180,252,1)",marginBottom:14}}>View-only access. You can message the Manager.</div>}
         {err&&<div style={{background:"rgba(225,29,72,0.15)",border:"1px solid rgba(225,29,72,0.3)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#FCA5A5",marginBottom:12}}>{err}</div>}
-
-        <button disabled={locked||!uname.trim()} onClick={go} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:locked||!uname.trim()?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#4F46E5,#7C3AED)",color:locked||!uname.trim()?"rgba(255,255,255,.3)":"#fff",fontWeight:700,fontSize:14,cursor:locked||!uname.trim()?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:locked||!uname.trim()?"none":"0 4px 24px rgba(79,70,229,0.4)"}}>
-          Sign In →
+        <button disabled={locked||!sel} onClick={go} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:locked||!sel?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#4F46E5,#7C3AED)",color:locked||!sel?"rgba(255,255,255,.3)":"#fff",fontWeight:700,fontSize:14,cursor:locked||!sel?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:locked||!sel?"none":"0 4px 24px rgba(79,70,229,0.4)"}}>
+          {sel==="guest"?"Enter as Guest →":"Sign In →"}
         </button>
-
-        <div style={{marginTop:16,fontSize:11,color:"rgba(255,255,255,.25)",textAlign:"center"}}>
-          Type your name exactly as registered · contact Admin for PIN
-        </div>
       </div>
     </div>
   );
@@ -932,15 +900,7 @@ function MgrDash({data,me,dispatch,ro}){
 
       {tab==="adminpanel"&&isAdmin&&(
         <div>
-          {/* Guest View Control */}
-          <Card style={{marginBottom:14,borderLeft:`4px solid ${C.purple}`}}>
-            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:6}}>👁 Guest View Settings</div>
-            <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Control what a Guest sees when they log in.</div>
-            <Inp label="Guest Views As" value={data.guestConfig?.viewAs||"Manager"} onChange={v=>dispatch({type:"SET_GUEST_CONFIG",ch:{viewAs:v}})} opts={[{v:"Manager",l:"Manager (Full overview)"},{v:"TL",l:"Team Leader [TL]"},{v:"EMP",l:"Employee [EMP]"}]}/>
-            <div style={{fontSize:11,color:C.green,background:C.greenL,border:`1px solid ${C.green}30`,borderRadius:6,padding:"6px 10px"}}>
-              ✅ Currently: Guest sees the <strong>{data.guestConfig?.viewAs||"Manager"}</strong> dashboard (read-only)
-            </div>
-          </Card>
+          <Card style={{marginBottom:14}}>
             <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>➕ Add Any Member</div>
             <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Rahul Sharma" max={60}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee [EMP]"},{v:"TL",l:"Team Leader [TL]"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
@@ -1061,15 +1021,7 @@ function App(){
       <div style={{maxWidth:720,margin:"0 auto",padding:"18px 14px 60px"}}>
         {me.role==="EMP"&&<EmpDash data={data} me={me} dispatch={dispatch}/>}
         {me.role==="TL"&&<TLDash data={data} me={me} dispatch={dispatch}/>}
-        {(me.role==="Manager"||me.role==="Admin")&&<MgrDash data={data} me={me} dispatch={dispatch} ro={false}/>}
-        {me.role==="Guest"&&(()=>{
-          const viewAs=data.guestConfig?.viewAs||"Manager";
-          // Create a fake "me" for guest that matches the viewAs role
-          const guestMe={...me,role:viewAs==="Manager"?"Manager":viewAs==="TL"?"TL":"EMP"};
-          if(viewAs==="EMP") return <EmpDash data={data} me={guestMe} dispatch={()=>{}} ro={true}/>;
-          if(viewAs==="TL")  return <TLDash  data={data} me={guestMe} dispatch={()=>{}} ro={true}/>;
-          return <MgrDash data={data} me={me} dispatch={dispatch} ro={true}/>;
-        })()}
+        {(me.role==="Manager"||me.role==="Admin"||me.role==="Guest")&&<MgrDash data={data} me={me} dispatch={dispatch} ro={ro}/>}
       </div>
     </div>
   );
