@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <meta name="theme-color" content="#0F172A"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -17,14 +17,18 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif}#root{min-height:100vh}</style>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;-webkit-text-size-adjust:100%;}
+    #root{min-height:100vh}
+    input,select,textarea,button{font-family:inherit;-webkit-appearance:none;}
+  </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
 const{useState,useEffect,useRef}=React;
 
-// ── THEME ─────────────────────────────────────────────────────────────────────
 const C={
   bg:"#F4F5F7",white:"#FFFFFF",border:"#E2E8F0",border2:"#CBD5E1",
   text:"#0F172A",sub:"#334155",muted:"#94A3B8",
@@ -38,7 +42,6 @@ const C={
   pink:"#DB2777",navy:"#1E3A5F",
 };
 
-// ── SECURITY ──────────────────────────────────────────────────────────────────
 const SEC={
   PIN_MAX:8,NAME_MAX:60,NOTE_MAX:500,LINK_MAX:300,TITLE_MAX:120,MSG_MAX:400,HANDLE_MAX:50,
   validPin(v){if(typeof v!=="string"||v.length<4||v.length>this.PIN_MAX)return false;for(let i=0;i<v.length;i++){const c=v.charCodeAt(i);if(c<48||c>57)return false;}return true;},
@@ -46,46 +49,35 @@ const SEC={
   safeUrl(s){try{const u=new URL(s);if(u.protocol==="https:"||u.protocol==="http:")return u.href;}catch{}return null;},
 };
 
-// ── SESSION ───────────────────────────────────────────────────────────────────
 let SESSION=null;
 const mkTok=()=>{const a=new Uint8Array(16);crypto.getRandomValues(a);return Array.from(a).map(b=>b.toString(16).padStart(2,"0")).join("");};
 const createSession=id=>{SESSION={userId:id,token:mkTok(),exp:Date.now()+8*3600*1000};};
 const destroySession=()=>{SESSION=null;};
 const validSession=id=>!!(SESSION&&SESSION.userId===id&&Date.now()<SESSION.exp);
 
-// ── GOOGLE SHEETS SYNC (iframe form POST — CORS-free) ─────────────────────────
+// ── GOOGLE SHEETS SYNC (iframe form POST) ─────────────────────────────────────
 const SHEET_URL="https://script.google.com/macros/s/AKfycbxkhbZzIrYa_EeM9iYB_nGCAElUpD-ata621MkQ_Kmesb84yjApIPjqqroCVUY2j8Wv/exec";
 const syncToSheet=(type,payload)=>{
   try{
-    // Hidden iframe form POST — bypasses CORS preflight completely
     const iframeId="__sheet_sync_frame__";
     let iframe=document.getElementById(iframeId);
     if(!iframe){
       iframe=document.createElement("iframe");
-      iframe.id=iframeId;
-      iframe.name=iframeId;
+      iframe.id=iframeId;iframe.name=iframeId;
       iframe.style.cssText="display:none;width:0;height:0;border:none;position:absolute;left:-9999px;";
       document.body.appendChild(iframe);
     }
     const form=document.createElement("form");
-    form.method="POST";
-    form.action=SHEET_URL;
-    form.target=iframeId;
-    form.style.display="none";
-    const allData={type,...payload};
-    Object.entries(allData).forEach(([k,v])=>{
+    form.method="POST";form.action=SHEET_URL;form.target=iframeId;form.style.display="none";
+    Object.entries({type,...payload}).forEach(([k,v])=>{
       const inp=document.createElement("input");
       inp.type="hidden";inp.name=k;inp.value=String(v==null?"":v);
       form.appendChild(inp);
     });
-    document.body.appendChild(form);
-    form.submit();
+    document.body.appendChild(form);form.submit();
     setTimeout(()=>{try{document.body.removeChild(form);}catch{}},3000);
   }catch(e){console.warn("Sheet sync failed:",e);}
 };
-
-// ── GUEST VIEW CONFIG (Admin controls what Guest sees) ────────────────────────
-const DEFAULT_GUEST_CONFIG = { viewAs: "Manager" };
 
 const CONTENT_TYPES_BY_DEPT={
   Content:["Carousel","Static"],
@@ -106,70 +98,63 @@ const IG_PAGES=[
   "Video Projects","Research Briefs","Other",
 ];
 
+// ── MASTER USER LIST ──────────────────────────────────────────────────────────
+// This is the single source of truth. loadData() always overwrites these users.
+const MASTER_USERS=[
+  {id:1, name:"Admin",   role:"Admin",   dept:"All",     avatar:"AD",pin:"0000"},
+  {id:2, name:"Manager", role:"Manager", dept:"All",     avatar:"MG",pin:"1111"},
+  {id:3, name:"Salman",  role:"TL",      dept:"Content", avatar:"SL",pin:"2001"},
+  {id:4, name:"Kaif",    role:"TL",      dept:"Content", avatar:"KF",pin:"2002"},
+  {id:5, name:"Sandeep", role:"TL",      dept:"Content", avatar:"SD",pin:"2003"},
+  {id:6, name:"Aniket T",role:"TL",      dept:"Content", avatar:"AT",pin:"2004"},
+  {id:7, name:"Chahat",  role:"TL",      dept:"Video",   avatar:"CH",pin:"2005"},
+  {id:8, name:"Salman",  role:"EMP",     dept:"Content", avatar:"SL",pin:"3001",tlId:3},
+  {id:9, name:"Irfan",   role:"EMP",     dept:"Content", avatar:"IR",pin:"3002",tlId:3},
+  {id:10,name:"Nikhil",  role:"EMP",     dept:"Content", avatar:"NK",pin:"3003",tlId:3},
+  {id:11,name:"Kaif",    role:"EMP",     dept:"Content", avatar:"KF",pin:"3004",tlId:4},
+  {id:12,name:"Om-1",    role:"EMP",     dept:"Content", avatar:"O1",pin:"3005",tlId:4},
+  {id:13,name:"Sandeep", role:"EMP",     dept:"Content", avatar:"SD",pin:"3006",tlId:5},
+  {id:14,name:"Shubham", role:"EMP",     dept:"Content", avatar:"SH",pin:"3007",tlId:5},
+  {id:15,name:"Rahul",   role:"EMP",     dept:"Content", avatar:"RL",pin:"3008",tlId:5},
+  {id:16,name:"Aniket T",role:"EMP",     dept:"Content", avatar:"AT",pin:"3009",tlId:6},
+  {id:17,name:"Om-2",    role:"EMP",     dept:"Content", avatar:"O2",pin:"3010",tlId:6},
+  {id:18,name:"Divyesh", role:"EMP",     dept:"Video",   avatar:"DV",pin:"3011",tlId:7},
+  {id:19,name:"Vishal",  role:"EMP",     dept:"Video",   avatar:"VS",pin:"3012",tlId:7},
+  {id:20,name:"Santosh", role:"EMP",     dept:"Video",   avatar:"SN",pin:"3013",tlId:7},
+  {id:21,name:"Zaid",    role:"EMP",     dept:"Video",   avatar:"ZD",pin:"3014",tlId:7},
+  {id:22,name:"Gracy",   role:"EMP",     dept:"Research",avatar:"GR",pin:"3015",tlId:7},
+  {id:23,name:"Tanishka",role:"EMP",     dept:"Research",avatar:"TK",pin:"3016",tlId:7},
+  {id:24,name:"Chahat",  role:"EMP",     dept:"Research",avatar:"CH",pin:"3017",tlId:7},
+];
+
 const SEED={
-  users:[
-    {id:1,name:"Admin",role:"Admin",dept:"All",avatar:"AD",pin:"0000"},
-    {id:2,name:"Manager",role:"Manager",dept:"All",avatar:"MG",pin:"1111"},
-    // TLs
-    {id:3,name:"Salman",  role:"TL",dept:"Content", avatar:"SL",pin:"2001"},
-    {id:4,name:"Kaif",    role:"TL",dept:"Content", avatar:"KF",pin:"2002"},
-    {id:5,name:"Sandeep", role:"TL",dept:"Content", avatar:"SD",pin:"2003"},
-    {id:6,name:"Aniket T",role:"TL",dept:"Content", avatar:"AT",pin:"2004"},
-    {id:7,name:"Chahat",  role:"TL",dept:"Video",   avatar:"CH",pin:"2005"},
-    // Salman's team
-    {id:8, name:"Salman", role:"EMP",dept:"Content",avatar:"SL",pin:"3001",tlId:3},
-    {id:9, name:"Irfan",  role:"EMP",dept:"Content",avatar:"IR",pin:"3002",tlId:3},
-    {id:10,name:"Nikhil", role:"EMP",dept:"Content",avatar:"NK",pin:"3003",tlId:3},
-    // Kaif's team
-    {id:11,name:"Kaif",role:"EMP",dept:"Content",avatar:"KF",pin:"3004",tlId:4},
-    {id:12,name:"Om-1",role:"EMP",dept:"Content",avatar:"O1",pin:"3005",tlId:4},
-    // Sandeep's team
-    {id:13,name:"Sandeep",role:"EMP",dept:"Content",avatar:"SD",pin:"3006",tlId:5},
-    {id:14,name:"Shubham",role:"EMP",dept:"Content",avatar:"SH",pin:"3007",tlId:5},
-    {id:15,name:"Rahul",  role:"EMP",dept:"Content",avatar:"RL",pin:"3008",tlId:5},
-    // Aniket T's team
-    {id:16,name:"Aniket T",role:"EMP",dept:"Content",avatar:"AT",pin:"3009",tlId:6},
-    {id:17,name:"Om-2",    role:"EMP",dept:"Content",avatar:"O2",pin:"3010",tlId:6},
-    // Chahat's Video team
-    {id:18,name:"Divyesh",role:"EMP",dept:"Video",   avatar:"DV",pin:"3011",tlId:7},
-    {id:19,name:"Vishal", role:"EMP",dept:"Video",   avatar:"VS",pin:"3012",tlId:7},
-    {id:20,name:"Santosh",role:"EMP",dept:"Video",   avatar:"SN",pin:"3013",tlId:7},
-    {id:21,name:"Zaid",   role:"EMP",dept:"Video",   avatar:"ZD",pin:"3014",tlId:7},
-    // Chahat's Research team
-    {id:22,name:"Gracy",   role:"EMP",dept:"Research",avatar:"GR",pin:"3015",tlId:7},
-    {id:23,name:"Tanishka",role:"EMP",dept:"Research",avatar:"TK",pin:"3016",tlId:7},
-    {id:24,name:"Chahat",  role:"EMP",dept:"Research",avatar:"CH",pin:"3017",tlId:7},
-  ],
-  tasks:[],
-  submissions:[],
-  notifications:[],
+  users:MASTER_USERS,
+  tasks:[],submissions:[],notifications:[],
   announcements:[{id:1,from:"Manager",msg:"Welcome to WooHoo Media! Manipulating Internet 🚀",ts:"2026-06-14 09:00"}],
-  attendance:[],
-  leaves:[],
-  messages:[],
-  guestConfig: { viewAs: "Manager" },
+  attendance:[],leaves:[],messages:[],
+  guestConfig:{viewAs:"Manager"},
   igPages:[
-    {id:"ig1", handle:"rajasthan",    name:"Rajasthan",      category:"Regional",    avatar:"RJ",updatedAt:"2026-06-14"},
-    {id:"ig2", handle:"maharashtra",  name:"Maharashtra",    category:"Regional",    avatar:"MH",updatedAt:"2026-06-14"},
-    {id:"ig3", handle:"bombay",       name:"Bombay",         category:"Regional",    avatar:"BM",updatedAt:"2026-06-14"},
-    {id:"ig4", handle:"kolkata",      name:"Kolkata",        category:"Regional",    avatar:"KL",updatedAt:"2026-06-14"},
-    {id:"ig5", handle:"westbengal",   name:"West Bengal",    category:"Regional",    avatar:"WB",updatedAt:"2026-06-14"},
-    {id:"ig6", handle:"sarcasm",      name:"Sarcasm",        category:"Humor",       avatar:"SC",updatedAt:"2026-06-14"},
-    {id:"ig7", handle:"moodofgirls",  name:"Mood of Girls",  category:"Lifestyle",   avatar:"MG",updatedAt:"2026-06-14"},
-    {id:"ig8", handle:"brands",       name:"Brands",         category:"Marketing",   avatar:"BR",updatedAt:"2026-06-14"},
-    {id:"ig9", handle:"ultraluxury",  name:"Ultra Luxury",   category:"Luxury",      avatar:"UL",updatedAt:"2026-06-14"},
-    {id:"ig10",handle:"jewellery",    name:"Jewellery",      category:"Fashion",     avatar:"JW",updatedAt:"2026-06-14"},
-    {id:"ig11",handle:"mewar",        name:"Mewar",          category:"Regional",    avatar:"MW",updatedAt:"2026-06-14"},
-    {id:"ig12",handle:"uttarpradesh", name:"Uttar Pradesh",  category:"Regional",    avatar:"UP",updatedAt:"2026-06-14"},
-    {id:"ig13",handle:"ayodhya",      name:"Ayodhya",        category:"Regional",    avatar:"AY",updatedAt:"2026-06-14"},
-    {id:"ig14",handle:"rasalkhaimah", name:"Ras Al Khaimah", category:"Travel",      avatar:"RK",updatedAt:"2026-06-14"},
-    {id:"ig15",handle:"worldtour",    name:"World Tour",     category:"Travel",      avatar:"WT",updatedAt:"2026-06-14"},
-    {id:"ig16",handle:"sharemarket",  name:"Share Market",   category:"Finance",     avatar:"SM",updatedAt:"2026-06-14"},
-    {id:"ig17",handle:"muzic",        name:"Muzic",          category:"Music",       avatar:"MZ",updatedAt:"2026-06-14"},
-    {id:"ig18",handle:"rapindia",     name:"Rap India",      category:"Music",       avatar:"RI",updatedAt:"2026-06-14"},
-    {id:"ig19",handle:"aifuture",     name:"AI Future",      category:"Tech",        avatar:"AI",updatedAt:"2026-06-14"},
-    {id:"ig20",handle:"techindia",    name:"Tech India",     category:"Tech",        avatar:"TI",updatedAt:"2026-06-14"},
-    {id:"ig21",handle:"tamilnadu",    name:"Tamil Nadu",     category:"Regional",    avatar:"TN",updatedAt:"2026-06-14"},
+    {id:"ig1", handle:"rajasthan",    name:"Rajasthan",      category:"Regional",     avatar:"RJ",updatedAt:"2026-06-14"},
+    {id:"ig2", handle:"maharashtra",  name:"Maharashtra",    category:"Regional",     avatar:"MH",updatedAt:"2026-06-14"},
+    {id:"ig3", handle:"bombay",       name:"Bombay",         category:"Regional",     avatar:"BM",updatedAt:"2026-06-14"},
+    {id:"ig4", handle:"kolkata",      name:"Kolkata",        category:"Regional",     avatar:"KL",updatedAt:"2026-06-14"},
+    {id:"ig5", handle:"westbengal",   name:"West Bengal",    category:"Regional",     avatar:"WB",updatedAt:"2026-06-14"},
+    {id:"ig6", handle:"sarcasm",      name:"Sarcasm",        category:"Humor",        avatar:"SC",updatedAt:"2026-06-14"},
+    {id:"ig7", handle:"moodofgirls",  name:"Mood of Girls",  category:"Lifestyle",    avatar:"MG",updatedAt:"2026-06-14"},
+    {id:"ig8", handle:"brands",       name:"Brands",         category:"Marketing",    avatar:"BR",updatedAt:"2026-06-14"},
+    {id:"ig9", handle:"ultraluxury",  name:"Ultra Luxury",   category:"Luxury",       avatar:"UL",updatedAt:"2026-06-14"},
+    {id:"ig10",handle:"jewellery",    name:"Jewellery",      category:"Fashion",      avatar:"JW",updatedAt:"2026-06-14"},
+    {id:"ig11",handle:"mewar",        name:"Mewar",          category:"Regional",     avatar:"MW",updatedAt:"2026-06-14"},
+    {id:"ig12",handle:"uttarpradesh", name:"Uttar Pradesh",  category:"Regional",     avatar:"UP",updatedAt:"2026-06-14"},
+    {id:"ig13",handle:"ayodhya",      name:"Ayodhya",        category:"Regional",     avatar:"AY",updatedAt:"2026-06-14"},
+    {id:"ig14",handle:"rasalkhaimah", name:"Ras Al Khaimah", category:"Travel",       avatar:"RK",updatedAt:"2026-06-14"},
+    {id:"ig15",handle:"worldtour",    name:"World Tour",     category:"Travel",       avatar:"WT",updatedAt:"2026-06-14"},
+    {id:"ig16",handle:"sharemarket",  name:"Share Market",   category:"Finance",      avatar:"SM",updatedAt:"2026-06-14"},
+    {id:"ig17",handle:"muzic",        name:"Muzic",          category:"Music",        avatar:"MZ",updatedAt:"2026-06-14"},
+    {id:"ig18",handle:"rapindia",     name:"Rap India",      category:"Music",        avatar:"RI",updatedAt:"2026-06-14"},
+    {id:"ig19",handle:"aifuture",     name:"AI Future",      category:"Tech",         avatar:"AI",updatedAt:"2026-06-14"},
+    {id:"ig20",handle:"techindia",    name:"Tech India",     category:"Tech",         avatar:"TI",updatedAt:"2026-06-14"},
+    {id:"ig21",handle:"tamilnadu",    name:"Tamil Nadu",     category:"Regional",     avatar:"TN",updatedAt:"2026-06-14"},
     {id:"ig22",handle:"paparazzi",    name:"Paparazzi",      category:"Entertainment",avatar:"PZ",updatedAt:"2026-06-14"},
   ],
 };
@@ -180,21 +165,19 @@ const loadData=()=>{
     const raw=localStorage.getItem(STORE);
     if(!raw)return SEED;
     const d=JSON.parse(raw);
-    // Always ensure SEED users exist — merge missing ones by id
-    const existingIds=new Set((d.users||[]).map(u=>u.id));
-    const missingUsers=SEED.users.filter(u=>!existingIds.has(u.id));
-    if(missingUsers.length>0){
-      d.users=[...(d.users||[]),...missingUsers];
-      localStorage.setItem(STORE,JSON.stringify(d));
-    }
-    // Ensure guestConfig exists
+    // ALWAYS overwrite users from MASTER_USERS by id — this fixes stale/corrupt user data
+    // Keep any extra users added via Admin panel (id > 24)
+    const extraUsers=(d.users||[]).filter(u=>!MASTER_USERS.find(m=>m.id===u.id));
+    d.users=[...MASTER_USERS,...extraUsers];
     if(!d.guestConfig)d.guestConfig={viewAs:"Manager"};
+    if(!d.messages)d.messages=[];
+    if(!d.igPages||d.igPages.length===0)d.igPages=SEED.igPages;
+    if(!d.announcements||d.announcements.length===0)d.announcements=SEED.announcements;
     return d;
   }catch{return SEED;}
 };
 const saveData=d=>{try{localStorage.setItem(STORE,JSON.stringify(d));}catch{}};
 
-// ── REDUCER ───────────────────────────────────────────────────────────────────
 function reducer(s,a){
   let n;
   switch(a.type){
@@ -220,13 +203,12 @@ function reducer(s,a){
     case"UPD_IG":     n={...s,igPages:s.igPages.map(p=>p.id===a.id?{...p,...a.ch}:p)};break;
     case"ADD_MSG":    n={...s,messages:[...(s.messages||[]),a.p]};break;
     case"READ_MSG":   n={...s,messages:(s.messages||[]).map(m=>m.id===a.id?{...m,read:true}:m)};break;
-    case"SET_GUEST_CONFIG": n={...s,guestConfig:{...s.guestConfig,...a.ch}};break;
+    case"SET_GUEST_CONFIG":n={...s,guestConfig:{...s.guestConfig,...a.ch}};break;
     default:return s;
   }
   saveData(n);return n;
 }
 
-// ── UTILS ─────────────────────────────────────────────────────────────────────
 const today=()=>new Date().toISOString().slice(0,10);
 const nowTime=()=>new Date().toTimeString().slice(0,5);
 const newId=()=>Date.now()+Math.floor(Math.random()*999);
@@ -236,15 +218,12 @@ const priColor=p=>({High:C.red,Medium:C.yellow,Low:C.green}[p]||C.muted);
 const stColor=s=>({Pending:C.yellow,"In Progress":C.accent,Approved:C.green,Rejected:C.red,Done:C.green}[s]||C.muted);
 const lvColor=s=>({Pending:C.yellow,Approved:C.green,Rejected:C.red}[s]||C.muted);
 
-// ── UI ATOMS ──────────────────────────────────────────────────────────────────
 const Bdg=({label,color})=><span style={{background:color+"18",color,padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap",border:`1px solid ${color}30`,display:"inline-block"}}>{label}</span>;
-
 const Btn=({children,onClick,color=C.accent,ghost,danger,full,sm,disabled})=>(
   <button disabled={disabled} onClick={onClick} style={{padding:sm?"5px 14px":"9px 20px",borderRadius:8,fontWeight:600,fontSize:sm?12:13,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.45:1,width:full?"100%":"auto",fontFamily:"inherit",border:ghost?`1px solid ${C.border2}`:danger?`1px solid ${C.red}30`:"none",background:ghost?C.white:danger?"rgba(225,29,72,.08)":disabled?"#e2e8f0":color,color:ghost?C.sub:danger?C.red:"#fff",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
     {children}
   </button>
 );
-
 const Inp=({label,value,onChange,placeholder,type="text",opts,rows,max,ro})=>(
   <div style={{marginBottom:13}}>
     {label&&<div style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px"}}>{label}</div>}
@@ -258,18 +237,15 @@ const Inp=({label,value,onChange,placeholder,type="text",opts,rows,max,ro})=>(
     }
   </div>
 );
-
 const ReadOnly=({label,value})=>(
   <div style={{marginBottom:13}}>
     <div style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px"}}>{label}</div>
     <div style={{background:"#f8fafc",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"9px 11px",fontSize:13,color:C.sub}}>{value}</div>
   </div>
 );
-
 const Card=({children,style:s,onClick,left})=>(
-  <div onClick={onClick} style={{background:C.white,border:`1.5px solid ${left?left+"40":C.border}`,borderRadius:10,padding:14,borderLeft:left?`4px solid ${left}`:undefined,boxShadow:"0 1px 4px rgba(0,0,0,.04)",transition:"box-shadow .2s",...s,cursor:onClick?"pointer":"default"}}>{children}</div>
+  <div onClick={onClick} style={{background:C.white,border:`1.5px solid ${left?left+"40":C.border}`,borderRadius:10,padding:14,borderLeft:left?`4px solid ${left}`:undefined,boxShadow:"0 1px 4px rgba(0,0,0,.04)",...s,cursor:onClick?"pointer":"default"}}>{children}</div>
 );
-
 const Dlg=({title,onClose,children})=>(
   <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <div style={{background:C.white,borderRadius:14,width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,.3)"}}>
@@ -281,18 +257,15 @@ const Dlg=({title,onClose,children})=>(
     </div>
   </div>
 );
-
 const Av=({name,color,size=32})=>(
   <div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color},${color}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(9,Math.floor(size/3.5)),fontWeight:800,color:"#fff",flexShrink:0}}>{name}</div>
 );
-
 const Empty=({icon,msg})=>(
   <div style={{textAlign:"center",padding:"36px 16px"}}>
     <div style={{fontSize:32,marginBottom:8,opacity:.4}}>{icon}</div>
     <div style={{fontSize:13,color:C.muted,fontWeight:500}}>{msg}</div>
   </div>
 );
-
 const Tabs=({tabs,active,onChange})=>(
   <div style={{display:"flex",gap:0,borderBottom:`1.5px solid ${C.border}`,marginBottom:16,overflowX:"auto",background:C.white,borderRadius:"10px 10px 0 0",padding:"0 4px"}}>
     {tabs.map(t=>(
@@ -302,7 +275,6 @@ const Tabs=({tabs,active,onChange})=>(
     ))}
   </div>
 );
-
 const Stats=({items})=>(
   <div style={{display:"grid",gridTemplateColumns:`repeat(${items.length},1fr)`,gap:10,marginBottom:16}}>
     {items.map(s=>(
@@ -314,7 +286,6 @@ const Stats=({items})=>(
   </div>
 );
 
-// ── SUBMIT WORK FORM (shared by EMP and TL) ───────────────────────────────────
 function WorkSubmitForm({me,data,dispatch,isTL}){
   const tl=data.users.find(u=>u.id===me.tlId);
   const dept=me.dept||"Content";
@@ -324,20 +295,18 @@ function WorkSubmitForm({me,data,dispatch,isTL}){
   const[sCount,setSCount]=useState("1");
   const[sPage,setSPage]=useState(IG_PAGES[0]);
   const[sRemarks,setSRemarks]=useState("");
-
   const submit=()=>{
     if(!sDate||!sType||!sPage){alert("Fill all required fields");return;}
     const count=parseInt(sCount)||1;
     const tlName=isTL?me.name:(tl?.name||"");
-    const title=`${sType} ×${count} — ${sPage}`;
+    const title=`${sType} x${count} — ${sPage}`;
     dispatch({type:"ADD_SUB",p:{id:newId(),empId:me.id,type:sType,title,link:sRemarks,taskId:null,status:"Pending",submittedAt:new Date().toLocaleString(),note:sRemarks}});
     const notify=isTL?data.users.find(u=>u.role==="Manager"||u.role==="Admin"):tl;
-    if(notify)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:notify.id,fromName:me.name,msg:`📤 ${me.name}: ${sType} ×${count} on ${sPage}`,read:false,ts:new Date().toLocaleString()}});
+    if(notify)dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:notify.id,fromName:me.name,msg:`📤 ${me.name}: ${sType} x${count} on ${sPage}`,read:false,ts:new Date().toLocaleString()}});
     syncToSheet("WORK_SUBMIT",{date:sDate,teamLeader:tlName,employeeName:me.name,contentType:sType,workCount:count,pageName:sPage,remarks:sRemarks});
     setSCount("1");setSPage(IG_PAGES[0]);setSRemarks("");
-    alert("✅ Submitted & synced to Google Sheet!");
+    alert("Submitted & synced to Google Sheet!");
   };
-
   return(
     <Card>
       <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:16}}>📤 Submit Work</div>
@@ -366,80 +335,69 @@ function Login({users,onLogin}){
   const go=()=>{
     if(locked){setErr("Too many attempts. Wait 30s.");return;}
     const name=uname.trim().toLowerCase();
-    if(!name){setErr("Enter your username");return;}
-    // Guest access
-    if(name==="guest"||name==="guest login"){
+    if(!name){setErr("Enter your name");return;}
+
+    // Guest — no PIN needed
+    if(name==="guest"){
       onLogin({id:"guest",name:"Guest",role:"Guest",avatar:"G",dept:"—",pin:""});
       return;
     }
-    if(!SEC.validPin(pin)){setErr("PIN must be 4–8 digits");return;}
-    // Match by name (case-insensitive) — try all users
-    const matches=users.filter(u=>u.name.toLowerCase()===name);
-    if(matches.length===0){setErr(`"${uname.trim()}" not found — check spelling`);return;}
-    // Try each match (same name can be TL + EMP with different PINs)
-    const u=matches.find(u=>u.pin&&u.pin.length===pin.length&&[...u.pin].every((c,i)=>c===pin[i]));
+
+    // Find all users whose name matches (case-insensitive)
+    const matches=users.filter(u=>u.name.trim().toLowerCase()===name);
+    if(matches.length===0){
+      setErr(`Name "${uname.trim()}" not found`);
+      return;
+    }
+
+    // Validate PIN format
+    if(!pin||pin.length<4){setErr("PIN must be at least 4 digits");return;}
+    const digitsOnly=/^\d+$/.test(pin);
+    if(!digitsOnly){setErr("PIN must be digits only");return;}
+
+    // Try to match name + PIN
+    const u=matches.find(m=>m.pin===pin);
     if(!u){
       const n=tries+1;setTries(n);
       if(n>=5){
-        setLocked(true);
-        setErr("5 failed attempts. Locked 30s.");
+        setLocked(true);setErr("5 failed attempts. Locked for 30s.");
         ref.current=setTimeout(()=>{setLocked(false);setTries(0);setErr("");},30000);
-      } else setErr(`Wrong PIN — ${5-n} attempt(s) left`);
+      } else {
+        setErr(`Wrong PIN — ${5-n} attempt(s) left`);
+      }
       return;
     }
     createSession(u.id);setTries(0);onLogin(u);
   };
 
   return(
-    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 40%,#312E81 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"-apple-system,BlinkMacSystemFont,'Inter',sans-serif"}}>
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 40%,#312E81 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderRadius:20,padding:36,width:"100%",maxWidth:400,border:"1px solid rgba(255,255,255,0.12)",boxShadow:"0 32px 64px rgba(0,0,0,0.4)"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{width:64,height:64,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 16px",boxShadow:"0 8px 32px rgba(79,70,229,0.4)"}}>🎯</div>
           <div style={{fontWeight:900,fontSize:26,color:"#fff",letterSpacing:"-.5px"}}>WooHoo Media</div>
           <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginTop:5,letterSpacing:".5px"}}>Manipulating Internet</div>
         </div>
-
-        {/* Username */}
         <div style={{marginBottom:14}}>
-          <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>Username</div>
-          <input
-            value={uname}
-            onChange={e=>{setUname(e.target.value);setErr("");}}
-            onKeyDown={e=>e.key==="Enter"&&go()}
-            placeholder="Enter your name"
-            autoComplete="off"
-            style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>Name</div>
+          <input value={uname} onChange={e=>{setUname(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="e.g. Irfan" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck="false"
+            style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
         </div>
-
-        {/* PIN */}
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>PIN</div>
-          <input
-            value={pin}
-            type="password"
-            maxLength={SEC.PIN_MAX}
-            autoComplete="off"
-            placeholder="••••••"
-            onChange={e=>{if(e.target.value.length<=SEC.PIN_MAX){setPin(e.target.value);setErr("");}}}
-            onKeyDown={e=>e.key==="Enter"&&go()}
-            style={{width:"100%",background:"rgba(255,255,255,0.08)",border:`1px solid ${locked?"rgba(225,29,72,.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:16,outline:"none",boxSizing:"border-box",fontFamily:"inherit",letterSpacing:"4px"}}/>
+          <input value={pin} type="password" inputMode="numeric" pattern="[0-9]*" maxLength={SEC.PIN_MAX} autoComplete="off" placeholder="••••" onChange={e=>{setPin(e.target.value.replace(/\D/g,"").slice(0,SEC.PIN_MAX));setErr("");}} onKeyDown={e=>e.key==="Enter"&&go()}
+            style={{width:"100%",background:"rgba(255,255,255,0.08)",border:`1px solid ${locked?"rgba(225,29,72,.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:16,outline:"none",boxSizing:"border-box",letterSpacing:"4px"}}/>
         </div>
-
         {err&&<div style={{background:"rgba(225,29,72,0.15)",border:"1px solid rgba(225,29,72,0.3)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#FCA5A5",marginBottom:12}}>{err}</div>}
-
-        <button disabled={locked||!uname.trim()} onClick={go} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:locked||!uname.trim()?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#4F46E5,#7C3AED)",color:locked||!uname.trim()?"rgba(255,255,255,.3)":"#fff",fontWeight:700,fontSize:14,cursor:locked||!uname.trim()?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:locked||!uname.trim()?"none":"0 4px 24px rgba(79,70,229,0.4)"}}>
+        <button disabled={locked||!uname.trim()} onClick={go} style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:locked||!uname.trim()?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#4F46E5,#7C3AED)",color:locked||!uname.trim()?"rgba(255,255,255,.3)":"#fff",fontWeight:700,fontSize:14,cursor:locked||!uname.trim()?"not-allowed":"pointer",boxShadow:locked||!uname.trim()?"none":"0 4px 24px rgba(79,70,229,0.4)"}}>
           Sign In →
         </button>
-
-        <div style={{marginTop:16,fontSize:11,color:"rgba(255,255,255,.25)",textAlign:"center"}}>
-          Type your name exactly as registered · contact Admin for PIN
-        </div>
+        <div style={{marginTop:16,fontSize:11,color:"rgba(255,255,255,.25)",textAlign:"center"}}>Type your exact name · contact Admin for PIN</div>
       </div>
     </div>
   );
 }
 
-// ── BELL ──────────────────────────────────────────────────────────────────────
 function Bell({notifs,uid,onRead}){
   const[open,setOpen]=useState(false);
   const mine=notifs.filter(n=>n.toId===uid);
@@ -469,7 +427,6 @@ function Bell({notifs,uid,onRead}){
   );
 }
 
-// ── TASK CARD ─────────────────────────────────────────────────────────────────
 function TaskCard({task,users,me,dispatch,ro}){
   const[open,setOpen]=useState(false);
   const u=users.find(x=>x.id===task.assignedTo);
@@ -499,7 +456,6 @@ function TaskCard({task,users,me,dispatch,ro}){
   );
 }
 
-// ── SUB CARD ──────────────────────────────────────────────────────────────────
 function SubCard({sub,users,me,dispatch,ro}){
   const u=users.find(x=>x.id===sub.empId);
   const href=SEC.safeUrl(sub.link||"");
@@ -513,7 +469,7 @@ function SubCard({sub,users,me,dispatch,ro}){
           <div style={{fontWeight:600,fontSize:13,color:C.text}}>{sub.title}</div>
           <div style={{fontSize:11,color:C.muted,marginTop:1}}>{u?.name} · {sub.submittedAt}</div>
           {sub.note&&<div style={{fontSize:11,color:C.sub,marginTop:3}}>{sub.note}</div>}
-          {href?<a href={href} target="_blank" rel="noreferrer noopener" onClick={e=>e.stopPropagation()} style={{display:"inline-block",marginTop:6,fontSize:11,color:C.accent,textDecoration:"none",fontWeight:500}}>🔗 Open Link ↗</a>:sub.link?<span style={{fontSize:11,color:C.muted,marginTop:4,display:"block"}}>⚠ Invalid link</span>:null}
+          {href?<a href={href} target="_blank" rel="noreferrer noopener" onClick={e=>e.stopPropagation()} style={{display:"inline-block",marginTop:6,fontSize:11,color:C.accent,textDecoration:"none",fontWeight:500}}>🔗 Open Link ↗</a>:sub.link?<span style={{fontSize:11,color:C.muted,marginTop:4,display:"block"}}>Invalid link</span>:null}
         </div>
       </div>
       {canApprove&&sub.status==="Pending"&&(
@@ -526,7 +482,6 @@ function SubCard({sub,users,me,dispatch,ro}){
   );
 }
 
-// ── ATTENDANCE BLOCK ──────────────────────────────────────────────────────────
 function AttBlock({data,me,dispatch,ro}){
   const[wfh,setWfh]=useState(false);
   const rec=data.attendance.find(a=>a.userId===me.id&&a.date===today());
@@ -548,7 +503,7 @@ function AttBlock({data,me,dispatch,ro}){
         <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:12}}>Today — {today()}</div>
         {!rec&&!ro&&(
           <div style={{display:"flex",gap:8,marginBottom:12}}>
-            {[false,true].map(w=><button key={String(w)} onClick={()=>setWfh(w)} style={{flex:1,padding:"7px",borderRadius:6,border:`1px solid ${wfh===w?C.accent:C.border2}`,background:wfh===w?C.accentL:C.white,color:wfh===w?C.accent:C.sub,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{w?"🏠 Work from Home":"🏢 Office"}</button>)}
+            {[false,true].map(w=><button key={String(w)} onClick={()=>setWfh(w)} style={{flex:1,padding:"7px",borderRadius:6,border:`1px solid ${wfh===w?C.accent:C.border2}`,background:wfh===w?C.accentL:C.white,color:wfh===w?C.accent:C.sub,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{w?"🏠 WFH":"🏢 Office"}</button>)}
           </div>
         )}
         {rec&&<div style={{marginBottom:10}}><Bdg label={rec.wfh?"🏠 WFH":"🏢 Office"} color={rec.wfh?C.purple:C.accent}/></div>}
@@ -578,7 +533,6 @@ function AttBlock({data,me,dispatch,ro}){
   );
 }
 
-// ── LEAVE BLOCK ───────────────────────────────────────────────────────────────
 function LeaveBlock({data,me,dispatch,ro}){
   const[lt,setLt]=useState("apply");
   const[lFrom,setLFrom]=useState("");const[lTo,setLTo]=useState("");
@@ -612,7 +566,6 @@ function LeaveBlock({data,me,dispatch,ro}){
   );
 }
 
-// ── INSTAGRAM SECTION ─────────────────────────────────────────────────────────
 function IgSection({data,dispatch,ro}){
   const[sel,setSel]=useState(data.igPages[0]?.id||null);
   const[q,setQ]=useState("");
@@ -630,7 +583,7 @@ function IgSection({data,dispatch,ro}){
   return(
     <div style={{display:"flex",gap:0,border:`1.5px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:C.white}}>
       <div style={{width:185,flexShrink:0,borderRight:`1px solid ${C.border}`,background:"#F8FAFC",padding:10}}>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search pages..." style={{width:"100%",background:C.white,border:`1px solid ${C.border2}`,borderRadius:6,padding:"6px 8px",color:C.text,fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",marginBottom:8}}/>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search pages..." style={{width:"100%",background:C.white,border:`1px solid ${C.border2}`,borderRadius:6,padding:"6px 8px",color:C.text,fontSize:11,outline:"none",boxSizing:"border-box",marginBottom:8}}/>
         {pages.map(p=>(
           <div key={p.id} onClick={()=>setSel(p.id)} style={{padding:"8px 10px",borderRadius:7,marginBottom:4,cursor:"pointer",background:sel===p.id?C.white:"transparent",border:`1px solid ${sel===p.id?C.border:"transparent"}`,boxShadow:sel===p.id?"0 1px 3px rgba(0,0,0,.05)":"none"}}>
             <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:sel===p.id?7:0}}>
@@ -646,7 +599,7 @@ function IgSection({data,dispatch,ro}){
             </div>}
           </div>
         ))}
-        {!ro&&<button onClick={()=>setShowAdd(true)} style={{width:"100%",padding:"6px",borderRadius:6,border:`1.5px dashed ${C.border2}`,background:"transparent",color:C.muted,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>+ Add Page</button>}
+        {!ro&&<button onClick={()=>setShowAdd(true)} style={{width:"100%",padding:"6px",borderRadius:6,border:`1.5px dashed ${C.border2}`,background:"transparent",color:C.muted,fontSize:11,cursor:"pointer",marginTop:4}}>+ Add Page</button>}
       </div>
       <div style={{flex:1,padding:14,minWidth:0}}>
         {!page?<Empty icon="📱" msg="Select a page"/>:(
@@ -677,7 +630,6 @@ function IgSection({data,dispatch,ro}){
   );
 }
 
-// ── EMPLOYEE DASHBOARD ────────────────────────────────────────────────────────
 function EmpDash({data,me,dispatch}){
   const[tab,setTab]=useState("tasks");
   const myT=data.tasks.filter(t=>t.assignedTo===me.id);
@@ -707,7 +659,6 @@ function EmpDash({data,me,dispatch}){
   );
 }
 
-// ── TL DASHBOARD ──────────────────────────────────────────────────────────────
 function TLDash({data,me,dispatch}){
   const[tab,setTab]=useState("mytasks");
   const[aTitle,setATitle]=useState("");const[aType,setAType]=useState(getContentTypes(me.dept||"Content")[0]);
@@ -756,7 +707,6 @@ function TLDash({data,me,dispatch}){
   );
 }
 
-// ── MANAGER / ADMIN / GUEST DASHBOARD ─────────────────────────────────────────
 function MgrDash({data,me,dispatch,ro}){
   const[tab,setTab]=useState("overview");
   const[atT,setAtT]=useState("");const[atTy,setAtTy]=useState("Carousel");const[atPr,setAtPr]=useState("High");const[atTo,setAtTo]=useState("");const[atD,setAtD]=useState("");const[atN,setAtN]=useState("");
@@ -797,7 +747,7 @@ function MgrDash({data,me,dispatch,ro}){
     const name=SEC.sanitize(uN,60);
     if(!name||!uP){alert("Name and PIN required");return;}
     if(!SEC.validPin(uP)){alert("PIN must be 4–8 digits");return;}
-    if(data.users.some(u=>u.pin===uP)){alert("PIN taken");return;}
+    if(data.users.some(u=>u.pin===uP)){alert("PIN already taken");return;}
     if(uR==="EMP"&&!uTL){alert("Select a TL");return;}
     dispatch({type:"ADD_USER",p:{id:newId(),name,role:uR,dept:uD,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),pin:uP,tlId:uR==="EMP"&&uTL?Number(uTL):undefined}});
     setUN("");setUP("");setUTL("");
@@ -856,10 +806,10 @@ function MgrDash({data,me,dispatch,ro}){
       {tab==="tasks"&&(
         <div>
           {!ro&&<Card style={{marginBottom:14}}>
-            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Assign Task to [TL]</div>
+            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Assign Task to TL</div>
             <Inp label="Title" value={atT} onChange={setAtT} placeholder="Task title..." max={120}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Type" value={atTy} onChange={setAtTy} opts={["Carousel","Static","Main Video","Top 5 News","Complete Scripts","Research","Voiceover"]}/><Inp label="Priority" value={atPr} onChange={setAtPr} opts={PRIS}/></div>
-            <Inp label="Assign To [TL]" value={atTo} onChange={setAtTo} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>
+            <Inp label="Assign To TL" value={atTo} onChange={setAtTo} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>
             <Inp label="Due Date" value={atD} onChange={setAtD} type="date"/>
             <Inp label="Notes" value={atN} onChange={setAtN} placeholder="Instructions..." rows={2} max={500}/>
             <Btn onClick={doAssignTL} full>Assign &amp; Notify</Btn>
@@ -912,8 +862,8 @@ function MgrDash({data,me,dispatch,ro}){
           {!ro&&<Card style={{marginBottom:14}}>
             <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Add Team Member</div>
             <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Kiran Desai" max={60}/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee [EMP]"},{v:"TL",l:"Team Leader [TL]"},{v:"Manager",l:"Manager"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
-            {uR==="EMP"&&<Inp label="Under [TL]" value={uTL} onChange={setUTL} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee"},{v:"TL",l:"Team Leader"},{v:"Manager",l:"Manager"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
+            {uR==="EMP"&&<Inp label="Under TL" value={uTL} onChange={setUTL} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>}
             <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={8}/>
             <Btn onClick={doAddUser} full>Add Member</Btn>
           </Card>}
@@ -971,20 +921,19 @@ function MgrDash({data,me,dispatch,ro}){
 
       {tab==="adminpanel"&&isAdmin&&(
         <div>
-          {/* Guest View Control */}
           <Card style={{marginBottom:14,borderLeft:`4px solid ${C.purple}`}}>
             <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:6}}>👁 Guest View Settings</div>
             <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Control what a Guest sees when they log in.</div>
-            <Inp label="Guest Views As" value={data.guestConfig?.viewAs||"Manager"} onChange={v=>dispatch({type:"SET_GUEST_CONFIG",ch:{viewAs:v}})} opts={[{v:"Manager",l:"Manager (Full overview)"},{v:"TL",l:"Team Leader [TL]"},{v:"EMP",l:"Employee [EMP]"}]}/>
+            <Inp label="Guest Views As" value={data.guestConfig?.viewAs||"Manager"} onChange={v=>dispatch({type:"SET_GUEST_CONFIG",ch:{viewAs:v}})} opts={[{v:"Manager",l:"Manager (Full overview)"},{v:"TL",l:"Team Leader"},{v:"EMP",l:"Employee"}]}/>
             <div style={{fontSize:11,color:C.green,background:C.greenL,border:`1px solid ${C.green}30`,borderRadius:6,padding:"6px 10px"}}>
-              ✅ Currently: Guest sees the <strong>{data.guestConfig?.viewAs||"Manager"}</strong> dashboard (read-only)
+              Currently: Guest sees the <strong>{data.guestConfig?.viewAs||"Manager"}</strong> dashboard (read-only)
             </div>
           </Card>
           <Card style={{marginBottom:14}}>
-            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>➕ Add Any Member</div>
+            <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:14}}>Add Any Member</div>
             <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Rahul Sharma" max={60}/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee [EMP]"},{v:"TL",l:"Team Leader [TL]"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
-            {uR==="EMP"&&<Inp label="Under [TL]" value={uTL} onChange={setUTL} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee"},{v:"TL",l:"Team Leader"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
+            {uR==="EMP"&&<Inp label="Under TL" value={uTL} onChange={setUTL} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>}
             <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={8}/>
             <Btn onClick={doAddUser} full>Add Member</Btn>
           </Card>
@@ -1021,7 +970,6 @@ function MgrDash({data,me,dispatch,ro}){
           <Card style={{marginBottom:12}}>
             <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16}}><Av name={me.avatar} color={roleColor(me.role)} size={48}/><div><div style={{fontWeight:700,color:C.text,fontSize:15}}>{me.name}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{me.dept} · <Bdg label={me.role} color={roleColor(me.role)}/></div></div></div>
             <div style={{height:1,background:C.border,margin:"0 0 14px"}}/>
-            <div style={{fontWeight:600,fontSize:13,color:C.text,marginBottom:12}}>Edit My Details</div>
             <Inp label="Full Name" value={myName} onChange={setMyName} placeholder="Your name" max={60}/>
             <Inp label="Department" value={myDept} onChange={setMyDept} opts={DEPTS}/>
             <Btn onClick={()=>{const name=SEC.sanitize(myName,60);if(!name.trim()){alert("Name cannot be empty");return;}dispatch({type:"UPD_USER",id:me.id,ch:{name,dept:myDept,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)}});me.name=name;me.dept=myDept;alert("Profile updated!");}} full>Save Profile</Btn>
@@ -1039,7 +987,6 @@ function MgrDash({data,me,dispatch,ro}){
   );
 }
 
-// ── APP ROOT ──────────────────────────────────────────────────────────────────
 function App(){
   const[data,setData]=useState(()=>loadData());
   const[me,setMe]=useState(null);
@@ -1053,60 +1000,56 @@ function App(){
     return()=>clearInterval(iv);
   },[me]);
 
-  if(!me){return <Login users={data.users} onLogin={login}/>;}
+  if(!me)return <Login users={data.users} onLogin={login}/>;
   if(me.role!=="Guest"&&!validSession(me.id)){destroySession();return <Login users={data.users} onLogin={login}/>;}
 
   const ro=me.role==="Guest";
-
   return(
     <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif",color:C.text}}>
-      {/* NAV */}
-      <div style={{background:"linear-gradient(90deg,#0F172A 0%,#1E3A5F 100%)",padding:"0 20px",display:"flex",alignItems:"center",gap:12,height:54,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:30,height:30,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,boxShadow:"0 4px 12px rgba(79,70,229,0.4)"}}>🎯</div>
+      <div style={{background:"linear-gradient(90deg,#0F172A 0%,#1E3A5F 100%)",padding:"0 16px",display:"flex",alignItems:"center",gap:10,height:54,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:28,height:28,background:"linear-gradient(135deg,#4F46E5,#7C3AED)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎯</div>
           <div>
-            <div style={{fontWeight:800,fontSize:14,color:"#fff",letterSpacing:"-.3px",lineHeight:1}}>WooHoo Media</div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,.35)",letterSpacing:".5px"}}>Manipulating Internet</div>
+            <div style={{fontWeight:800,fontSize:13,color:"#fff",letterSpacing:"-.3px",lineHeight:1}}>WooHoo Media</div>
+            <div style={{fontSize:8,color:"rgba(255,255,255,.35)",letterSpacing:".5px"}}>Manipulating Internet</div>
           </div>
         </div>
         <div style={{flex:1}}/>
-        {ro&&<span style={{background:"rgba(234,88,12,.2)",color:"#FDBA74",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1px solid rgba(234,88,12,.3)"}}>Guest</span>}
-        {me.role==="Admin"&&<span style={{background:"rgba(124,58,237,.2)",color:"#C4B5FD",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1px solid rgba(124,58,237,.3)"}}>Admin</span>}
+        {ro&&<span style={{background:"rgba(234,88,12,.2)",color:"#FDBA74",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,border:"1px solid rgba(234,88,12,.3)"}}>Guest</span>}
+        {me.role==="Admin"&&<span style={{background:"rgba(124,58,237,.2)",color:"#C4B5FD",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,border:"1px solid rgba(124,58,237,.3)"}}>Admin</span>}
         <Bell notifs={data.notifications} uid={me.id} onRead={id=>dispatch({type:"READ_NOTIF",id})}/>
-        <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"4px 10px",border:"1px solid rgba(255,255,255,0.1)"}}>
-          <div style={{width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#4F46E5,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>{me.avatar}</div>
-          <span style={{fontSize:12,color:"rgba(255,255,255,.8)",fontWeight:500}}>{me.name}</span>
+        <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"4px 8px",border:"1px solid rgba(255,255,255,0.1)"}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#4F46E5,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:"#fff"}}>{me.avatar}</div>
+          <span style={{fontSize:11,color:"rgba(255,255,255,.8)",fontWeight:500,maxWidth:70,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{me.name}</span>
         </div>
-        <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"5px 11px",color:"rgba(255,255,255,.6)",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Sign out</button>
+        <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"5px 8px",color:"rgba(255,255,255,.6)",fontSize:11,cursor:"pointer"}}>Out</button>
       </div>
 
-      {/* HERO */}
-      <div style={{background:"linear-gradient(135deg,#1E3A5F 0%,#312E81 100%)",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div style={{background:"linear-gradient(135deg,#1E3A5F 0%,#312E81 100%)",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div>
-          <div style={{fontWeight:800,fontSize:17,color:"#fff"}}>{me.name}</div>
-          <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginTop:3,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{fontWeight:800,fontSize:16,color:"#fff"}}>{me.name}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
             <span>{me.dept}</span>
-            <span style={{background:`${roleColor(me.role)}30`,color:roleColor(me.role),padding:"1px 8px",borderRadius:20,fontSize:11,fontWeight:600}}>[{me.role}]</span>
+            <span style={{background:`${roleColor(me.role)}30`,color:roleColor(me.role),padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:600}}>[{me.role}]</span>
           </div>
         </div>
         {data.announcements.length>0&&(
-          <div style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"8px 14px",maxWidth:280}}>
-            <div style={{fontSize:10,color:"rgba(165,243,252,1)",fontWeight:600,marginBottom:2}}>📢 Announcement</div>
-            <div style={{fontSize:12,color:"rgba(255,255,255,.75)",lineHeight:1.4}}>{data.announcements[data.announcements.length-1].msg}</div>
+          <div style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"7px 12px",maxWidth:240}}>
+            <div style={{fontSize:9,color:"rgba(165,243,252,1)",fontWeight:600,marginBottom:2}}>📢 Latest</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,.75)",lineHeight:1.4}}>{data.announcements[data.announcements.length-1].msg}</div>
           </div>
         )}
       </div>
 
-      {/* CONTENT */}
-      <div style={{maxWidth:720,margin:"0 auto",padding:"18px 14px 60px"}}>
+      <div style={{maxWidth:720,margin:"0 auto",padding:"16px 12px 60px"}}>
         {me.role==="EMP"&&<EmpDash data={data} me={me} dispatch={dispatch}/>}
         {me.role==="TL"&&<TLDash data={data} me={me} dispatch={dispatch}/>}
         {(me.role==="Manager"||me.role==="Admin")&&<MgrDash data={data} me={me} dispatch={dispatch} ro={false}/>}
         {me.role==="Guest"&&(()=>{
           const viewAs=data.guestConfig?.viewAs||"Manager";
           const guestMe={...me,role:viewAs==="Manager"?"Manager":viewAs==="TL"?"TL":"EMP"};
-          if(viewAs==="EMP") return <EmpDash data={data} me={guestMe} dispatch={()=>{}} ro={true}/>;
-          if(viewAs==="TL")  return <TLDash  data={data} me={guestMe} dispatch={()=>{}} ro={true}/>;
+          if(viewAs==="EMP")return <EmpDash data={data} me={guestMe} dispatch={()=>{}} ro={true}/>;
+          if(viewAs==="TL") return <TLDash  data={data} me={guestMe} dispatch={()=>{}} ro={true}/>;
           return <MgrDash data={data} me={me} dispatch={dispatch} ro={true}/>;
         })()}
       </div>
