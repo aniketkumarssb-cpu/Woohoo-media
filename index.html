@@ -376,11 +376,9 @@ function Login({users,onLogin}){
     // Match by name (case-insensitive) — try all users
     const matches=users.filter(u=>u.name.toLowerCase()===name);
     if(matches.length===0){setErr(`"${uname.trim()}" not found — check spelling`);return;}
-    // Try each match (same name can be TL + EMP)
-    const u=matches.find(u=>{
-      const ok=u.pin&&u.pin.length===pin.length&&[...u.pin].every((c,i)=>c===pin[i]);
-      return ok;
-    });
+    // Try each match (same name can be TL + EMP with different PINs)
+    const u=matches.find(u=>u.pin&&u.pin.length===pin.length&&[...u.pin].every((c,i)=>c===pin[i]));
+    if(!u){
       const n=tries+1;setTries(n);
       if(n>=5){
         setLocked(true);
