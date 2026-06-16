@@ -831,7 +831,7 @@ function MgrDash({data,me,dispatch,ro}){
         <div>
           <Card style={{marginBottom:14,borderLeft:`4px solid ${C.purple}`}}>
             <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:6}}>👁 Guest View Settings</div>
-            <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Control what a Guest s
+            <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Control what a Guest sees when they log in.</div>
             <Inp label="Guest Views As" value={data.guestConfig?.viewAs||"Manager"} onChange={v=>dispatch({type:"SET_GUEST_CONFIG",ch:{viewAs:v}})} opts={[{v:"Manager",l:"Manager (Full overview)"},{v:"TL",l:"Team Leader"},{v:"EMP",l:"Employee"}]}/>
             <div style={{fontSize:11,color:C.green,background:C.greenL,border:`1px solid ${C.green}30`,borderRadius:6,padding:"6px 10px"}}>
               Currently: Guest sees the <strong>{data.guestConfig?.viewAs||"Manager"}</strong> dashboard (read-only)
