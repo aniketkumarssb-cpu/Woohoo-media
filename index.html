@@ -55,7 +55,6 @@ const createSession=id=>{SESSION={userId:id,token:mkTok(),exp:Date.now()+8*3600*
 const destroySession=()=>{SESSION=null;};
 const validSession=id=>!!(SESSION&&SESSION.userId===id&&Date.now()<SESSION.exp);
 
-// ── GOOGLE SHEETS SYNC (iframe form POST) ─────────────────────────────────────
 const SHEET_URL="https://script.google.com/macros/s/AKfycbxkhbZzIrYa_EeM9iYB_nGCAElUpD-ata621MkQ_Kmesb84yjApIPjqqroCVUY2j8Wv/exec";
 const syncToSheet=(type,payload)=>{
   try{
@@ -98,9 +97,8 @@ const IG_PAGES=[
   "Video Projects","Research Briefs","Other",
 ];
 
-// ── MASTER USER LIST ──────────────────────────────────────────────────────────
-// This is the single source of truth. loadData() always overwrites these users.
-const MASTER_USERS=[
+// Default users — only used when localStorage has NO data at all (first run)
+const DEFAULT_USERS=[
   {id:1, name:"Admin",   role:"Admin",   dept:"All",     avatar:"AD",pin:"0000"},
   {id:2, name:"Manager", role:"Manager", dept:"All",     avatar:"MG",pin:"1111"},
   {id:3, name:"Salman",  role:"TL",      dept:"Content", avatar:"SL",pin:"2001"},
@@ -128,10 +126,10 @@ const MASTER_USERS=[
 ];
 
 const SEED={
-  users:MASTER_USERS,
+  users:DEFAULT_USERS,
   tasks:[],submissions:[],notifications:[],
   announcements:[{id:1,from:"Manager",msg:"Welcome to WooHoo Media! Manipulating Internet 🚀",ts:"2026-06-14 09:00"}],
-  attendance:[],leaves:[],messages:[],
+  leaves:[],messages:[],
   guestConfig:{viewAs:"Manager"},
   igPages:[
     {id:"ig1", handle:"rajasthan",    name:"Rajasthan",      category:"Regional",     avatar:"RJ",updatedAt:"2026-06-14"},
@@ -163,18 +161,28 @@ const STORE="woohoo_v1";
 const loadData=()=>{
   try{
     const raw=localStorage.getItem(STORE);
-    if(!raw)return SEED;
+    // First ever run — save SEED and return it
+    if(!raw){saveData(SEED);return SEED;}
     const d=JSON.parse(raw);
-    // ALWAYS overwrite users from MASTER_USERS by id — this fixes stale/corrupt user data
-    // Keep any extra users added via Admin panel (id > 24)
-    const extraUsers=(d.users||[]).filter(u=>!MASTER_USERS.find(m=>m.id===u.id));
-    d.users=[...MASTER_USERS,...extraUsers];
+    // Keep ALL users exactly as stored (preserves edits/PIN changes)
+    // Only add DEFAULT_USERS that are completely missing by id
+    const storedIds=new Set((d.users||[]).map(u=>u.id));
+    const missing=DEFAULT_USERS.filter(u=>!storedIds.has(u.id));
+    if(missing.length>0){
+      d.users=[...(d.users||[]),...missing];
+      saveData(d);
+    }
+    // Ensure required fields exist
     if(!d.guestConfig)d.guestConfig={viewAs:"Manager"};
     if(!d.messages)d.messages=[];
-    if(!d.igPages||d.igPages.length===0)d.igPages=SEED.igPages;
+    if(!d.leaves)d.leaves=[];
+    if(!d.tasks)d.tasks=[];
+    if(!d.submissions)d.submissions=[];
+    if(!d.notifications)d.notifications=[];
     if(!d.announcements||d.announcements.length===0)d.announcements=SEED.announcements;
+    if(!d.igPages||d.igPages.length===0)d.igPages=SEED.igPages;
     return d;
-  }catch{return SEED;}
+  }catch{saveData(SEED);return SEED;}
 };
 const saveData=d=>{try{localStorage.setItem(STORE,JSON.stringify(d));}catch{}};
 
@@ -192,10 +200,6 @@ function reducer(s,a){
     case"ADD_USER":   n={...s,users:[...s.users,a.p]};break;
     case"DEL_USER":   n={...s,users:s.users.filter(u=>u.id!==a.id)};break;
     case"UPD_USER":   n={...s,users:s.users.map(u=>u.id===a.id?{...u,...a.ch}:u)};break;
-    case"PUNCH_IN":   n={...s,attendance:[...s.attendance,a.p]};break;
-    case"PUNCH_OUT":  n={...s,attendance:s.attendance.map(x=>x.id===a.id?{...x,logoutTime:a.out,hoursWorked:a.hw}:x)};break;
-    case"FIX_ATT":    n={...s,attendance:s.attendance.map(x=>x.id===a.id?{...x,...a.ch}:x)};break;
-    case"DEL_ATT":    n={...s,attendance:s.attendance.filter(x=>x.id!==a.id)};break;
     case"ADD_LEAVE":  n={...s,leaves:[...s.leaves,a.p]};break;
     case"REV_LEAVE":  n={...s,leaves:s.leaves.map(l=>l.id===a.id?{...l,status:a.st,reviewedBy:a.by}:l)};break;
     case"ADD_IG":     n={...s,igPages:[...s.igPages,a.p]};break;
@@ -210,9 +214,7 @@ function reducer(s,a){
 }
 
 const today=()=>new Date().toISOString().slice(0,10);
-const nowTime=()=>new Date().toTimeString().slice(0,5);
 const newId=()=>Date.now()+Math.floor(Math.random()*999);
-const calcHours=(a,b)=>{if(!a||!b)return"";const[ah,am]=a.split(":").map(Number),[bh,bm]=b.split(":").map(Number),d=(bh*60+bm)-(ah*60+am);return d>0?`${Math.floor(d/60)}h ${d%60}m`:""};
 const roleColor=r=>({Admin:C.purple,Manager:C.accent,TL:C.orange,EMP:C.green,Guest:C.muted}[r]||C.muted);
 const priColor=p=>({High:C.red,Medium:C.yellow,Low:C.green}[p]||C.muted);
 const stColor=s=>({Pending:C.yellow,"In Progress":C.accent,Approved:C.green,Rejected:C.red,Done:C.green}[s]||C.muted);
@@ -322,7 +324,6 @@ function WorkSubmitForm({me,data,dispatch,isTL}){
   );
 }
 
-// ── LOGIN ─────────────────────────────────────────────────────────────────────
 function Login({users,onLogin}){
   const[uname,setUname]=useState("");
   const[pin,setPin]=useState("");
@@ -331,45 +332,29 @@ function Login({users,onLogin}){
   const[locked,setLocked]=useState(false);
   const ref=useRef(null);
   useEffect(()=>()=>clearTimeout(ref.current),[]);
-
   const go=()=>{
     if(locked){setErr("Too many attempts. Wait 30s.");return;}
     const name=uname.trim().toLowerCase();
     if(!name){setErr("Enter your name");return;}
-
-    // Guest — no PIN needed
     if(name==="guest"){
       onLogin({id:"guest",name:"Guest",role:"Guest",avatar:"G",dept:"—",pin:""});
       return;
     }
-
-    // Find all users whose name matches (case-insensitive)
     const matches=users.filter(u=>u.name.trim().toLowerCase()===name);
-    if(matches.length===0){
-      setErr(`Name "${uname.trim()}" not found`);
-      return;
-    }
-
-    // Validate PIN format
+    if(matches.length===0){setErr(`"${uname.trim()}" not found`);return;}
     if(!pin||pin.length<4){setErr("PIN must be at least 4 digits");return;}
-    const digitsOnly=/^\d+$/.test(pin);
-    if(!digitsOnly){setErr("PIN must be digits only");return;}
-
-    // Try to match name + PIN
+    if(!/^\d+$/.test(pin)){setErr("PIN must be digits only");return;}
     const u=matches.find(m=>m.pin===pin);
     if(!u){
       const n=tries+1;setTries(n);
       if(n>=5){
         setLocked(true);setErr("5 failed attempts. Locked for 30s.");
         ref.current=setTimeout(()=>{setLocked(false);setTries(0);setErr("");},30000);
-      } else {
-        setErr(`Wrong PIN — ${5-n} attempt(s) left`);
-      }
+      }else{setErr(`Wrong PIN — ${5-n} attempt(s) left`);}
       return;
     }
     createSession(u.id);setTries(0);onLogin(u);
   };
-
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 40%,#312E81 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderRadius:20,padding:36,width:"100%",maxWidth:400,border:"1px solid rgba(255,255,255,0.12)",boxShadow:"0 32px 64px rgba(0,0,0,0.4)"}}>
@@ -385,7 +370,9 @@ function Login({users,onLogin}){
         </div>
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginBottom:6,fontWeight:600,textTransform:"uppercase",letterSpacing:".6px"}}>PIN</div>
-          <input value={pin} type="password" inputMode="numeric" pattern="[0-9]*" maxLength={SEC.PIN_MAX} autoComplete="off" placeholder="••••" onChange={e=>{setPin(e.target.value.replace(/\D/g,"").slice(0,SEC.PIN_MAX));setErr("");}} onKeyDown={e=>e.key==="Enter"&&go()}
+          <input value={pin} type="password" inputMode="numeric" pattern="[0-9]*" maxLength={SEC.PIN_MAX} autoComplete="off" placeholder="••••"
+            onChange={e=>{setPin(e.target.value.replace(/\D/g,"").slice(0,SEC.PIN_MAX));setErr("");}}
+            onKeyDown={e=>e.key==="Enter"&&go()}
             style={{width:"100%",background:"rgba(255,255,255,0.08)",border:`1px solid ${locked?"rgba(225,29,72,.6)":"rgba(255,255,255,0.15)"}`,borderRadius:10,padding:"11px 12px",color:"#fff",fontSize:16,outline:"none",boxSizing:"border-box",letterSpacing:"4px"}}/>
         </div>
         {err&&<div style={{background:"rgba(225,29,72,0.15)",border:"1px solid rgba(225,29,72,0.3)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#FCA5A5",marginBottom:12}}>{err}</div>}
@@ -479,57 +466,6 @@ function SubCard({sub,users,me,dispatch,ro}){
         </div>
       )}
     </Card>
-  );
-}
-
-function AttBlock({data,me,dispatch,ro}){
-  const[wfh,setWfh]=useState(false);
-  const rec=data.attendance.find(a=>a.userId===me.id&&a.date===today());
-  const punch=()=>{
-    const tl=data.users.find(u=>u.id===me.tlId);
-    if(!rec){
-      dispatch({type:"PUNCH_IN",p:{id:newId(),userId:me.id,date:today(),loginTime:nowTime(),logoutTime:"",hoursWorked:"",wfh}});
-      syncToSheet("ATTENDANCE",{date:today(),employeeName:me.name,teamLeader:tl?.name||"",loginTime:nowTime(),logoutTime:"",hoursWorked:"",wfh});
-    }else if(!rec.logoutTime){
-      const hw=calcHours(rec.loginTime,nowTime());
-      dispatch({type:"PUNCH_OUT",id:rec.id,out:nowTime(),hw});
-      syncToSheet("ATTENDANCE",{date:today(),employeeName:me.name,teamLeader:tl?.name||"",loginTime:rec.loginTime,logoutTime:nowTime(),hoursWorked:hw,wfh:rec.wfh});
-    }
-  };
-  const hist=data.attendance.filter(a=>a.userId===me.id).slice().reverse().slice(0,10);
-  return(
-    <div>
-      <Card style={{marginBottom:12}}>
-        <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:12}}>Today — {today()}</div>
-        {!rec&&!ro&&(
-          <div style={{display:"flex",gap:8,marginBottom:12}}>
-            {[false,true].map(w=><button key={String(w)} onClick={()=>setWfh(w)} style={{flex:1,padding:"7px",borderRadius:6,border:`1px solid ${wfh===w?C.accent:C.border2}`,background:wfh===w?C.accentL:C.white,color:wfh===w?C.accent:C.sub,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{w?"🏠 WFH":"🏢 Office"}</button>)}
-          </div>
-        )}
-        {rec&&<div style={{marginBottom:10}}><Bdg label={rec.wfh?"🏠 WFH":"🏢 Office"} color={rec.wfh?C.purple:C.accent}/></div>}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-          {[{l:"Login",v:rec?.loginTime||"—",c:C.green},{l:"Logout",v:rec?.logoutTime||"—",c:C.red},{l:"Hours",v:rec?.hoursWorked||"—",c:C.accent}].map(x=>(
-            <div key={x.l} style={{background:"#F8FAFC",borderRadius:6,padding:"10px 6px",textAlign:"center"}}>
-              <div style={{fontWeight:700,fontSize:14,color:x.c}}>{x.v}</div>
-              <div style={{fontSize:10,color:C.muted,marginTop:2}}>{x.l}</div>
-            </div>
-          ))}
-        </div>
-        {!ro&&(rec?.logoutTime?<div style={{background:C.greenL,border:`1px solid ${C.green}30`,borderRadius:6,padding:"9px",textAlign:"center",fontSize:12,color:C.green,fontWeight:500}}>✅ Day complete</div>:<Btn onClick={punch} color={rec?.loginTime?C.red:C.green} full>{rec?.loginTime?"🔴 Punch Out":"🟢 Punch In"}</Btn>)}
-      </Card>
-      <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:8}}>Recent History</div>
-      {hist.length===0?<Empty icon="🕐" msg="No records yet"/>:hist.map(a=>(
-        <Card key={a.id} style={{marginBottom:6,padding:"10px 14px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{fontSize:12,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:6}}>{a.date} <Bdg label={a.wfh?"WFH":"Office"} color={a.wfh?C.purple:C.accent}/></div>
-              <div style={{fontSize:11,color:C.muted,marginTop:2}}>🟢{a.loginTime||"—"} → 🔴{a.logoutTime||"—"}</div>
-            </div>
-            {a.hoursWorked?<Bdg label={a.hoursWorked} color={C.green}/>:<Bdg label={a.loginTime?"Active":"—"} color={C.yellow}/>}
-          </div>
-        </Card>
-      ))}
-    </div>
   );
 }
 
@@ -637,7 +573,7 @@ function EmpDash({data,me,dispatch}){
   const myN=data.notifications.filter(n=>n.toId===me.id);
   const pend=myT.filter(t=>t.status!=="Done").length;
   const unrd=myN.filter(n=>!n.read).length;
-  const TABS=[{k:"tasks",label:`Tasks${pend>0?` (${pend})`:""}`},{k:"submit",label:"Submit Work"},{k:"subs",label:"My Work"},{k:"att",label:"Attendance"},{k:"leave",label:"Leave"},{k:"ig",label:"Instagram"},{k:"alerts",label:`Alerts${unrd>0?` (${unrd})`:""}`}];
+  const TABS=[{k:"tasks",label:`Tasks${pend>0?` (${pend})`:""}`},{k:"submit",label:"Submit Work"},{k:"subs",label:"My Work"},{k:"leave",label:"Leave"},{k:"ig",label:"Instagram"},{k:"alerts",label:`Alerts${unrd>0?` (${unrd})`:""}`}];
   return(
     <div>
       <Stats items={[{l:"Tasks",v:myT.length,c:C.accent},{l:"Pending",v:myT.filter(t=>t.status==="Pending").length,c:C.yellow},{l:"In Progress",v:myT.filter(t=>t.status==="In Progress").length,c:C.blue},{l:"Done",v:myT.filter(t=>t.status==="Done").length,c:C.green}]}/>
@@ -645,7 +581,6 @@ function EmpDash({data,me,dispatch}){
       {tab==="tasks"&&(myT.length===0?<Empty icon="📋" msg="No tasks assigned yet"/>:myT.slice().reverse().map(t=><TaskCard key={t.id} task={t} users={data.users} me={me} dispatch={dispatch}/>))}
       {tab==="submit"&&<WorkSubmitForm me={me} data={data} dispatch={dispatch} isTL={false}/>}
       {tab==="subs"&&(myS.length===0?<Empty icon="📁" msg="No submissions yet"/>:myS.slice().reverse().map(s=><SubCard key={s.id} sub={s} users={data.users} me={me} dispatch={dispatch}/>))}
-      {tab==="att"&&<AttBlock data={data} me={me} dispatch={dispatch}/>}
       {tab==="leave"&&<LeaveBlock data={data} me={me} dispatch={dispatch}/>}
       {tab==="ig"&&<IgSection data={data} dispatch={dispatch}/>}
       {tab==="alerts"&&(myN.length===0?<Empty icon="🔔" msg="No notifications"/>:myN.slice().reverse().map(n=>(
@@ -676,7 +611,7 @@ function TLDash({data,me,dispatch}){
     setATitle("");setANote("");setADue("");setTab("teamtasks");
   };
   const pend=toMe.filter(t=>t.status!=="Done").length;
-  const TABS=[{k:"mytasks",label:`My Tasks${pend>0?` (${pend})`:""}`},{k:"mywork",label:"Submit My Work"},{k:"assign",label:"Assign"},{k:"teamtasks",label:"Team Tasks"},{k:"review",label:`Review (${tSubs.filter(s=>s.status==="Pending").length})`},{k:"team",label:"Team"},{k:"att",label:"Attendance"},{k:"leave",label:"Leave"}];
+  const TABS=[{k:"mytasks",label:`My Tasks${pend>0?` (${pend})`:""}`},{k:"mywork",label:"Submit My Work"},{k:"assign",label:"Assign"},{k:"teamtasks",label:"Team Tasks"},{k:"review",label:`Review (${tSubs.filter(s=>s.status==="Pending").length})`},{k:"team",label:"Team"},{k:"leave",label:"Leave"}];
   return(
     <div>
       <Stats items={[{l:"My Tasks",v:toMe.length,c:C.orange},{l:"Team Tasks",v:byMe.length,c:C.accent},{l:"Pending Review",v:tSubs.filter(s=>s.status==="Pending").length,c:C.yellow},{l:"Team Size",v:myTeam.length,c:C.purple}]}/>
@@ -698,10 +633,8 @@ function TLDash({data,me,dispatch}){
       {tab==="review"&&(tSubs.length===0?<Empty icon="👁" msg="No submissions"/>:tSubs.slice().reverse().map(s=><SubCard key={s.id} sub={s} users={data.users} me={me} dispatch={dispatch}/>))}
       {tab==="team"&&(myTeam.length===0?<Empty icon="👥" msg="No team members"/>:myTeam.map(emp=>{
         const et=data.tasks.filter(t=>t.assignedTo===emp.id),dn=et.filter(t=>t.status==="Done").length,pc=et.length?Math.round(dn/et.length*100):0;
-        const at=data.attendance.find(a=>a.userId===emp.id&&a.date===today());
-        return(<Card key={emp.id} style={{marginBottom:8,padding:"10px 14px"}}><div style={{display:"flex",gap:10,alignItems:"center"}}><Av name={emp.avatar} color={C.green} size={36}/><div style={{flex:1}}><div style={{fontWeight:600,color:C.text,fontSize:13}}>{emp.name} <Bdg label="EMP" color={C.green}/></div><div style={{fontSize:11,color:at?C.green:C.muted,marginTop:2}}>{at?`🟢 ${at.wfh?"WFH":"Office"} · In ${at.loginTime}`:"⚪ Not in today"}</div><div style={{height:3,borderRadius:3,background:C.border,marginTop:6}}><div style={{width:`${pc}%`,height:3,borderRadius:3,background:C.green}}/></div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{dn}/{et.length} tasks · {pc}%</div></div></div></Card>);
+        return(<Card key={emp.id} style={{marginBottom:8,padding:"10px 14px"}}><div style={{display:"flex",gap:10,alignItems:"center"}}><Av name={emp.avatar} color={C.green} size={36}/><div style={{flex:1}}><div style={{fontWeight:600,color:C.text,fontSize:13}}>{emp.name} <Bdg label="EMP" color={C.green}/></div><div style={{height:3,borderRadius:3,background:C.border,marginTop:6}}><div style={{width:`${pc}%`,height:3,borderRadius:3,background:C.green}}/></div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{dn}/{et.length} tasks · {pc}%</div></div></div></Card>);
       }))}
-      {tab==="att"&&<AttBlock data={data} me={me} dispatch={dispatch}/>}
       {tab==="leave"&&<LeaveBlock data={data} me={me} dispatch={dispatch}/>}
     </div>
   );
@@ -713,7 +646,6 @@ function MgrDash({data,me,dispatch,ro}){
   const[ann,setAnn]=useState("");
   const[uN,setUN]=useState("");const[uR,setUR]=useState("EMP");const[uD,setUD]=useState("Content");const[uTL,setUTL]=useState("");const[uP,setUP]=useState("");
   const[lF,setLF]=useState("Pending");
-  const[aD,setAD]=useState(today());const[aU,setAU]=useState("all");const[fixA,setFixA]=useState(null);
   const[editU,setEditU]=useState(null);
   const[cp,setCp]=useState({old:"",n1:"",n2:""});
   const[myName,setMyName]=useState(me.name);
@@ -721,10 +653,7 @@ function MgrDash({data,me,dispatch,ro}){
   const[gMsg,setGMsg]=useState("");
   const tls=data.users.filter(u=>u.role==="TL");
   const emps=data.users.filter(u=>u.role==="EMP");
-  const nonMgr=data.users.filter(u=>u.role!=="Manager"&&u.role!=="Admin");
   const pendL=data.leaves.filter(l=>l.status==="Pending").length;
-  const todayA=data.attendance.filter(a=>a.date===today());
-  const fAtt=data.attendance.filter(a=>(aD?a.date===aD:true)&&(aU==="all"?true:a.userId===Number(aU)));
   const fLeaves=lF==="All"?data.leaves:data.leaves.filter(l=>l.status===lF);
   const guestMsgs=(data.messages||[]).filter(m=>m.toId===me.id);
   const isGuest=me.role==="Guest";
@@ -779,7 +708,7 @@ function MgrDash({data,me,dispatch,ro}){
 
   const TABS=[
     {k:"overview",label:"Overview"},{k:"tasks",label:"Tasks"},{k:"subs",label:"Submissions"},
-    {k:"att",label:"Attendance"},{k:"leaves",label:`Leaves${pendL>0?` (${pendL})`:""}`},
+    {k:"leaves",label:`Leaves${pendL>0?` (${pendL})`:""}`},
     {k:"team",label:"Team"},{k:"ig",label:"Instagram"},{k:"announce",label:"Announce"},
     ...(isGuest?[{k:"message",label:"Message Manager"}]:[]),
     ...(!ro&&guestMsgs.length>0?[{k:"inbox",label:`Inbox${guestMsgs.filter(m=>!m.read).length>0?` (${guestMsgs.filter(m=>!m.read).length})`:""}`}]:[]),
@@ -820,27 +749,6 @@ function MgrDash({data,me,dispatch,ro}){
 
       {tab==="subs"&&(data.submissions.length===0?<Empty icon="📁" msg="No submissions"/>:data.submissions.slice().reverse().map(s=><SubCard key={s.id} sub={s} users={data.users} me={me} dispatch={dispatch} ro={ro}/>))}
 
-      {tab==="att"&&(
-        <div>
-          <Stats items={[{l:"In Office",v:todayA.filter(a=>!a.wfh&&a.loginTime&&!a.logoutTime).length,c:C.green},{l:"WFH",v:todayA.filter(a=>a.wfh&&!a.logoutTime).length,c:C.purple},{l:"Checked Out",v:todayA.filter(a=>a.logoutTime).length,c:C.red},{l:"Absent",v:nonMgr.length-todayA.length,c:C.muted}]}/>
-          <Card style={{marginBottom:10}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Date" value={aD} onChange={setAD} type="date"/><Inp label="Employee" value={aU} onChange={setAU} opts={[{v:"all",l:"All"},...nonMgr.map(u=>({v:u.id,l:u.name}))]}/></div></Card>
-          {fAtt.length===0?<Empty icon="🕐" msg="No records"/>:fAtt.slice().reverse().map(a=>{
-            const u=data.users.find(x=>x.id===a.userId);
-            return(<Card key={a.id} style={{marginBottom:6,padding:"10px 14px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:12,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:6}}>{u?.name} <Bdg label={a.wfh?"WFH":"Office"} color={a.wfh?C.purple:C.green}/></div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{a.date} · 🟢{a.loginTime} → 🔴{a.logoutTime||"—"}</div></div><div style={{display:"flex",gap:6,alignItems:"center"}}>{a.hoursWorked?<Bdg label={a.hoursWorked} color={C.green}/>:<Bdg label={a.loginTime?"Active":"—"} color={C.yellow}/>}{!ro&&<button onClick={()=>setFixA({...a})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Fix</button>}</div></div></Card>);
-          })}
-          {fixA&&<Dlg title="Fix Attendance Record" onClose={()=>setFixA(null)}>
-            <div style={{background:"#F8FAFC",borderRadius:6,padding:"10px 12px",marginBottom:12,fontSize:12,color:C.sub}}>Editing: <strong>{data.users.find(u=>u.id===fixA.userId)?.name}</strong> on {fixA.date}</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Login Time" value={fixA.loginTime||""} onChange={v=>setFixA(p=>({...p,loginTime:v}))} type="time"/><Inp label="Logout Time" value={fixA.logoutTime||""} onChange={v=>setFixA(p=>({...p,logoutTime:v}))} type="time"/></div>
-            <Inp label="Type" value={fixA.wfh?"wfh":"office"} onChange={v=>setFixA(p=>({...p,wfh:v==="wfh"}))} opts={[{v:"office",l:"🏢 Office"},{v:"wfh",l:"🏠 Work from Home"}]}/>
-            <div style={{fontSize:11,color:C.accent,background:C.accentL,border:`1px solid ${C.accent}30`,borderRadius:6,padding:"7px 10px",marginBottom:12}}>Hours will recalculate automatically.</div>
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={()=>{const hw=fixA.logoutTime?calcHours(fixA.loginTime,fixA.logoutTime):"";dispatch({type:"FIX_ATT",id:fixA.id,ch:{loginTime:fixA.loginTime,logoutTime:fixA.logoutTime,hoursWorked:hw,wfh:fixA.wfh}});dispatch({type:"ADD_NOTIF",p:{id:newId(),toId:fixA.userId,fromName:me.name,msg:`🔧 Attendance on ${fixA.date} corrected by ${me.name}`,read:false,ts:new Date().toLocaleString()}});setFixA(null);}} full>Save Correction</Btn>
-              <Btn onClick={()=>{if(window.confirm("Delete this record?"))dispatch({type:"DEL_ATT",id:fixA.id});setFixA(null);}} danger full>Delete</Btn>
-            </div>
-          </Dlg>}
-        </div>
-      )}
-
       {tab==="leaves"&&(
         <div>
           <Stats items={[{l:"Pending",v:data.leaves.filter(l=>l.status==="Pending").length,c:C.yellow},{l:"Approved",v:data.leaves.filter(l=>l.status==="Approved").length,c:C.green},{l:"Rejected",v:data.leaves.filter(l=>l.status==="Rejected").length,c:C.red}]}/>
@@ -871,13 +779,13 @@ function MgrDash({data,me,dispatch,ro}){
             const group=role==="TL"?tls:emps;
             return(<div key={role} style={{marginBottom:16}}>
               <div style={{fontSize:11,color:roleColor(role),fontWeight:700,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6,paddingLeft:8,borderLeft:`3px solid ${roleColor(role)}`}}>[{role}] — {group.length}</div>
-              {group.map(u=>{const tl=data.users.find(x=>x.id===u.tlId),tasks=data.tasks.filter(t=>t.assignedTo===u.id),at=data.attendance.find(a=>a.userId===u.id&&a.date===today());return(
+              {group.map(u=>{const tl=data.users.find(x=>x.id===u.tlId),tasks=data.tasks.filter(t=>t.assignedTo===u.id);return(
                 <Card key={u.id} style={{marginBottom:6,padding:"10px 14px"}}>
                   <div style={{display:"flex",gap:10,alignItems:"center"}}>
                     <Av name={u.avatar} color={roleColor(u.role)} size={34}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:600,color:C.text,fontSize:13}}>{u.name}</div>
-                      <div style={{fontSize:10,color:C.muted,marginTop:1}}>{u.dept}{tl?` · Under ${tl.name}`:""}{at?` · 🟢 ${at.wfh?"WFH":"Office"}`:" · ⚪ Absent"}</div>
+                      <div style={{fontSize:10,color:C.muted,marginTop:1}}>{u.dept}{tl?` · Under ${tl.name}`:""}</div>
                       {role==="EMP"&&<div style={{fontSize:10,color:C.muted}}>{tasks.filter(t=>t.status==="Done").length}/{tasks.length} tasks done</div>}
                     </div>
                     {!ro&&<><button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10,fontFamily:"inherit"}}>Edit</button><button onClick={()=>{if(window.confirm(`Remove ${u.name}?`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>✕</button></>}
@@ -923,7 +831,7 @@ function MgrDash({data,me,dispatch,ro}){
         <div>
           <Card style={{marginBottom:14,borderLeft:`4px solid ${C.purple}`}}>
             <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:6}}>👁 Guest View Settings</div>
-            <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Control what a Guest sees when they log in.</div>
+            <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Control what a Guest s
             <Inp label="Guest Views As" value={data.guestConfig?.viewAs||"Manager"} onChange={v=>dispatch({type:"SET_GUEST_CONFIG",ch:{viewAs:v}})} opts={[{v:"Manager",l:"Manager (Full overview)"},{v:"TL",l:"Team Leader"},{v:"EMP",l:"Employee"}]}/>
             <div style={{fontSize:11,color:C.green,background:C.greenL,border:`1px solid ${C.green}30`,borderRadius:6,padding:"6px 10px"}}>
               Currently: Guest sees the <strong>{data.guestConfig?.viewAs||"Manager"}</strong> dashboard (read-only)
@@ -934,7 +842,7 @@ function MgrDash({data,me,dispatch,ro}){
             <Inp label="Full Name" value={uN} onChange={setUN} placeholder="e.g. Rahul Sharma" max={60}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={uR} onChange={setUR} opts={[{v:"EMP",l:"Employee"},{v:"TL",l:"Team Leader"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/><Inp label="Department" value={uD} onChange={setUD} opts={DEPTS}/></div>
             {uR==="EMP"&&<Inp label="Under TL" value={uTL} onChange={setUTL} opts={[{v:"",l:"— Select TL —"},...tls.map(u=>({v:u.id,l:`${u.name} (${u.dept})`}))]}/>}
-            <Inp label="Login PIN (4–8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={8}/>
+            <Inp label="Login PIN (4-8 digits)" value={uP} onChange={setUP} placeholder="e.g. 9999" type="password" max={8}/>
             <Btn onClick={doAddUser} full>Add Member</Btn>
           </Card>
           <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".5px",marginBottom:10}}>All Users — {data.users.length} total</div>
@@ -943,22 +851,22 @@ function MgrDash({data,me,dispatch,ro}){
             if(!group.length)return null;
             return(<div key={role} style={{marginBottom:14}}>
               <div style={{fontSize:11,color:roleColor(role),fontWeight:700,textTransform:"uppercase",letterSpacing:".5px",marginBottom:6,paddingLeft:8,borderLeft:`3px solid ${roleColor(role)}`}}>[{role}] — {group.length}</div>
-              {group.map(u=>{const tl=data.users.find(x=>x.id===u.tlId),at=data.attendance.find(a=>a.userId===u.id&&a.date===today());return(
+              {group.map(u=>{const tl=data.users.find(x=>x.id===u.tlId);return(
                 <Card key={u.id} style={{marginBottom:6,padding:"10px 14px"}}>
                   <div style={{display:"flex",gap:10,alignItems:"center"}}>
                     <Av name={u.avatar} color={roleColor(u.role)} size={32}/>
-                    <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,color:C.text,fontSize:12}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.dept}{tl?` · Under ${tl.name}`:""}{at?` · 🟢`:" · ⚪"}</div></div>
+                    <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,color:C.text,fontSize:12}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.dept}{tl?` · Under ${tl.name}`:""}</div></div>
                     <Bdg label={u.role} color={roleColor(u.role)}/>
-                    {u.id!==me.id&&<><button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>Edit</button><button onClick={()=>{if(window.confirm(`Remove ${u.name}?`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>✕</button></>}
+                    {u.id!==me.id&&<><button onClick={()=>setEditU({...u})} style={{background:C.accentL,border:`1px solid ${C.accent}30`,color:C.accent,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>Edit</button><button onClick={()=>{if(window.confirm(`Remove ${u.name}?`))dispatch({type:"DEL_USER",id:u.id});}} style={{background:C.redL,border:`1px solid ${C.red}30`,color:C.red,borderRadius:4,padding:"3px 7px",cursor:"pointer",fontSize:10,marginLeft:4,fontFamily:"inherit"}}>x</button></>}
                   </div>
                 </Card>
               );})}
             </div>);
           })}
-          {editU&&<Dlg title={`Edit — ${editU.name}`} onClose={()=>setEditU(null)}>
+          {editU&&<Dlg title={`Edit - ${editU.name}`} onClose={()=>setEditU(null)}>
             <Inp label="Name" value={editU.name} onChange={v=>setEditU(p=>({...p,name:v}))} max={60}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Inp label="Role" value={editU.role} onChange={v=>setEditU(p=>({...p,role:v}))} opts={[{v:"EMP",l:"EMP"},{v:"TL",l:"TL"},{v:"Manager",l:"Manager"},{v:"Admin",l:"Admin"}]}/><Inp label="Dept" value={editU.dept} onChange={v=>setEditU(p=>({...p,dept:v}))} opts={DEPTS}/></div>
-            {editU.role==="EMP"&&<Inp label="Under TL" value={editU.tlId||""} onChange={v=>setEditU(p=>({...p,tlId:v?Number(v):undefined}))} opts={[{v:"",l:"— None —"},...tls.filter(t=>t.id!==editU.id).map(t=>({v:t.id,l:t.name}))]}/>}
+            {editU.role==="EMP"&&<Inp label="Under TL" value={editU.tlId||""} onChange={v=>setEditU(p=>({...p,tlId:v?Number(v):undefined}))} opts={[{v:"",l:"None"},...tls.filter(t=>t.id!==editU.id).map(t=>({v:t.id,l:t.name}))]}/>}
             <Inp label="PIN" value={editU.pin||""} onChange={v=>setEditU(p=>({...p,pin:v}))} type="password" max={8}/>
             <div style={{display:"flex",gap:8}}><Btn onClick={()=>{const name=SEC.sanitize(editU.name,60);if(!name||!editU.pin||!SEC.validPin(editU.pin)){alert("Check name and PIN");return;}dispatch({type:"UPD_USER",id:editU.id,ch:{name,role:editU.role,dept:editU.dept,pin:editU.pin,avatar:name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2),tlId:editU.role==="EMP"?editU.tlId:undefined}});setEditU(null);}} full>Save</Btn><Btn onClick={()=>setEditU(null)} ghost full>Cancel</Btn></div>
           </Dlg>}
@@ -993,16 +901,13 @@ function App(){
   const dispatch=a=>setData(p=>reducer(p,a));
   const login=u=>{if(u.role!=="Guest")createSession(u.id);setMe(u);};
   const logout=()=>{destroySession();setMe(null);};
-
   useEffect(()=>{
     if(!me||me.role==="Guest")return;
     const iv=setInterval(()=>{if(!validSession(me.id)){destroySession();setMe(null);}},60000);
     return()=>clearInterval(iv);
   },[me]);
-
   if(!me)return <Login users={data.users} onLogin={login}/>;
   if(me.role!=="Guest"&&!validSession(me.id)){destroySession();return <Login users={data.users} onLogin={login}/>;}
-
   const ro=me.role==="Guest";
   return(
     <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif",color:C.text}}>
@@ -1024,7 +929,6 @@ function App(){
         </div>
         <button onClick={logout} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"5px 8px",color:"rgba(255,255,255,.6)",fontSize:11,cursor:"pointer"}}>Out</button>
       </div>
-
       <div style={{background:"linear-gradient(135deg,#1E3A5F 0%,#312E81 100%)",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div>
           <div style={{fontWeight:800,fontSize:16,color:"#fff"}}>{me.name}</div>
@@ -1035,12 +939,11 @@ function App(){
         </div>
         {data.announcements.length>0&&(
           <div style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"7px 12px",maxWidth:240}}>
-            <div style={{fontSize:9,color:"rgba(165,243,252,1)",fontWeight:600,marginBottom:2}}>📢 Latest</div>
+            <div style={{fontSize:9,color:"rgba(165,243,252,1)",fontWeight:600,marginBottom:2}}>Latest</div>
             <div style={{fontSize:11,color:"rgba(255,255,255,.75)",lineHeight:1.4}}>{data.announcements[data.announcements.length-1].msg}</div>
           </div>
         )}
       </div>
-
       <div style={{maxWidth:720,margin:"0 auto",padding:"16px 12px 60px"}}>
         {me.role==="EMP"&&<EmpDash data={data} me={me} dispatch={dispatch}/>}
         {me.role==="TL"&&<TLDash data={data} me={me} dispatch={dispatch}/>}
